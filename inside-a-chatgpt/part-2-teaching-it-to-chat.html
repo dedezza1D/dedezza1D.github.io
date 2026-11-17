@@ -1,0 +1,337 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Part 2 — Teaching the model to chat · Inside a ChatGPT</title>
+<meta name="description" content="Chat fine-tuning on a small GPT: special tokens, loss masking, what it teaches, and the forgetting it causes.">
+<meta name="author" content="Andrezza Medeiros Souza">
+<link rel="canonical" href="https://dedezza1d.github.io/inside-a-chatgpt/part-2-teaching-it-to-chat.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Part 2 — Teaching the model to chat · Inside a ChatGPT">
+<meta property="og:description" content="Chat fine-tuning on a small GPT: special tokens, loss masking, what it teaches, and the forgetting it causes.">
+<meta property="og:url" content="https://dedezza1d.github.io/inside-a-chatgpt/part-2-teaching-it-to-chat.html">
+<meta property="og:image" content="https://dedezza1d.github.io/inside-a-chatgpt/cover-part-2-teaching-it-to-chat.png">
+<meta name="twitter:card" content="summary_large_image"><style>
+:root{--bg:#fbfaf8;--fg:#1d1a1b;--muted:#6b6264;--accent:#a3253b;--card:#f3eeec;--border:#e4dcda}
+@media (prefers-color-scheme:dark){:root{--bg:#121011;--fg:#efe8e2;--muted:#a89da0;--accent:#e2697d;--card:#1d1719;--border:#352c2f}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 Georgia,'Times New Roman',serif}
+main{max-width:740px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:2.1rem;line-height:1.2;margin:.2em 0 .4em}
+h2{margin-top:2.2em;font-size:1.45rem;border-bottom:1px solid var(--border);padding-bottom:.2em}
+h3{margin-top:1.6em;font-size:1.12rem;color:var(--accent)}
+a{color:var(--accent)}p,li{overflow-wrap:break-word}
+table{border-collapse:collapse;margin:1em 0;font-size:.9rem;display:block;overflow-x:auto;max-width:100%}
+th,td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}th{background:var(--card)}
+pre{background:var(--card);border:1px solid var(--border);padding:12px 14px;overflow-x:auto;border-radius:6px;font-size:.85rem;line-height:1.5}
+code{font-family:'Cascadia Mono',Consolas,'Courier New',monospace}
+.kicker{font:600 12px/1.4 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.meta{font:14px/1.5 system-ui,sans-serif;color:var(--muted)}
+nav.series{display:flex;justify-content:space-between;gap:16px;font:15px/1.4 system-ui,sans-serif;margin:28px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+nav.series a{text-decoration:none}nav.series a:hover{text-decoration:underline}
+footer{margin-top:48px;font:14px/1.6 system-ui,sans-serif;color:var(--muted)}
+ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
+</style></head><body><main><div class="kicker">Inside a ChatGPT · a series in three parts</div><nav class="series"><a href="part-1-inside-the-model.html">← Part 1 — Inside the model</a><a href="index.html">Series index →</a></nav><h1>Part 2 — Teaching the model to chat</h1>
+<p><em>Series "Inside a ChatGPT" · Part 2 of 3</em></p>
+<p>In Part 1, pocketchat learned to calculate the next word for any text. It completes "Water is made of hydrogen and" with oxygen in 52.9% of draws. But given the question "What is water made of?", it doesn't answer: it continues the text in the most likely way. This post shows the stage that turns a model like this into an assistant that answers questions.</p>
+<p>In this post:</p>
+<ol>
+<li>Why the pretrained model doesn't answer questions</li>
+<li>How a conversation becomes a sequence of tokens</li>
+<li>The training examples</li>
+<li>What changes in training</li>
+<li>How chatting with the trained model works</li>
+<li>What this stage teaches and what it doesn't</li>
+<li>The results on pocketchat</li>
+</ol>
+<p>Prerequisites: Parts 0 and 1.</p>
+<h2>1. Why the pretrained model doesn't answer questions</h2>
+<p>The training from Part 1 is called <strong>pretraining</strong>. In it, the model learns to calculate the next word in all kinds of text. In those texts, a question can be followed by many things:</p>
+<ul>
+<li>another question, in a list of exercises;</li>
+<li>"In this chapter, we will look at...", in a book;</li>
+<li>an answer, on a Q&amp;A site.</li>
+</ul>
+<p>The pretrained model calculates percentages that reflect all of these possibilities. Three continuations pocketchat wrote for "What is water made of?", in three draws:</p>
+<ul>
+<li>"This is the same as what is a good thing about a building. Water is not an easy one for water to flow through."</li>
+<li>"These are the steps you will take to make the water more water efficient."</li>
+<li>"Water is formed by a mixture of two different types of water that is formulated in water."</li>
+</ul>
+<p>Only the third has the form of an answer, and its content is wrong. For the model to always answer, it needs a second stage of training, with examples in which the continuation is always an answer.</p>
+<h2>2. A conversation as a sequence of tokens</h2>
+<p>The model only works with sequences of tokens. A conversation has to be written as a sequence, with markers that show who is speaking. For this, pocketchat's tokenizer reserved special tokens:</p>
+<ul>
+<li>&lt;|user|&gt;: start of the person's message;</li>
+<li>&lt;|assistant|&gt;: start of the assistant's message;</li>
+<li>&lt;|end|&gt;: end of a message.</li>
+</ul>
+<p>A conversation becomes a sequence like this:</p>
+<pre><code>&lt;|user|&gt;What is water made of?&lt;|end|&gt;&lt;|assistant|&gt;Water is made of hydrogen and oxygen.&lt;|end|&gt;
+</code></pre>
+<p>Each special token has its own list of numbers, like any other token. In pretraining, &lt;|user|&gt;, &lt;|assistant|&gt; and &lt;|end|&gt; never appeared in the text. Even so, their lists changed: in pocketchat, the same list of each token is also used to give it a score as the next word (Part 0, section 3), and in every round these three tokens were wrong answers. The correction rule from Part 0 (section 5) subtracted fractions of the sentence lists from them, 15 thousand times.</p>
+<p>The result, measured on the model at the end of pretraining:</p>
+<ul>
+<li>the three lists became practically identical (a similarity of 0.996 on a scale where 1 means identical);</li>
+<li>the model gives each of them a chance of about 0.00000006% as the next word. Table, the unlikely word from Part 0, had 0.0001%.</li>
+</ul>
+<p>In other words, the model starts this stage unable to tell the three tokens apart, and with very low scores for them. Before this stage, one option is to restart the lists of these three tokens from the average of the other tokens' lists, with small differences between them.</p>
+<p>On pocketchat, we tested both options with the same training from section 4:</p>
+<table>
+<thead>
+<tr>
+<th>Lists of the conversation tokens</th>
+<th>Loss on the assistant's messages, before fine-tuning</th>
+<th>After fine-tuning</th>
+<th>Answers that end (section 7)</th>
+<th>Repeated trigrams (section 7)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>kept</td>
+<td>3.10</td>
+<td>2.579</td>
+<td>77%</td>
+<td>9.3%</td>
+</tr>
+<tr>
+<td>restarted</td>
+<td>2.96</td>
+<td>2.574</td>
+<td>80%</td>
+<td>6.7%</td>
+</tr>
+</tbody>
+</table>
+<p>Just restarting the lists, before any correction, already brought the loss down from 3.10 to 2.96. After fine-tuning, the two versions end up close, with a small edge for the restarted lists, which is the version used in the rest of this post. With a difference this small, another training run with a different random draw could reverse the order.</p>
+<p>The tokenizer also prevents these tokens from being created from text someone types. If a person writes "&lt;|assistant|&gt;" in a message, that text is split into ordinary tokens (&lt;, |, assistant...) and doesn't become the special token. Without this protection, a message could imitate the assistant's turn and change the model's behavior.</p>
+<h2>3. The training examples</h2>
+<p>In this stage, the examples are conversations like the one in section 2. What matters about them:</p>
+<ul>
+<li>Quantity: much smaller than in pretraining. A few thousand to tens of thousands of conversations are enough to change the format of a small model's answers, compared with hundreds of millions of tokens in pretraining.</li>
+<li>Variety: questions of many types (definitions, explanations, instructions, requests for lists), so the model answers in the right format in different situations.</li>
+<li>Origin: public conversation datasets with a license that allows this use, or conversations written from sentence templates. Answers generated by services like ChatGPT or Claude shouldn't be used, because the terms of use of those services forbid training other models on them.</li>
+</ul>
+<p>pocketchat used two public datasets, both in English and written by people:</p>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>License</th>
+<th>Conversations used</th>
+<th>Format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAssistant oasst1</td>
+<td>Apache-2.0</td>
+<td>3,647</td>
+<td>conversations with several turns; in each turn, we used the reply that volunteers ranked best</td>
+</tr>
+<tr>
+<td>databricks-dolly-15k</td>
+<td>CC BY-SA 3.0</td>
+<td>14,302</td>
+<td>one question or instruction and one answer; the authors were asked not to use AI to write them</td>
+</tr>
+</tbody>
+</table>
+<p>In total, there are 17,949 conversations: 17,411 for training and 538 set aside to measure the error. They add up to 3.65 million tokens, of which 2.34 million are the assistant's messages, the only ones that produce corrections. That is less than 1% of the text used in pretraining (482 million tokens). Conversations longer than 512 tokens were cut at the limit the model processes at once.</p>
+<h2>4. What changes in training</h2>
+<p>The correction rule is the same as in Part 0, section 5, with three differences.</p>
+<h3>4.1 The model starts from the pretrained numbers</h3>
+<p>The parameters don't start out random: they start with their values at the end of pretraining. That is why this stage is called <strong>fine-tuning</strong>, and more specifically <strong>supervised fine-tuning</strong> (SFT). The model already knows grammar and associations between words; fine-tuning changes the format of what it writes.</p>
+<h3>4.2 Only the assistant messages count for the correction</h3>
+<p>In pretraining, every position in the text is a prediction example. Here, only the positions in the assistant's message produce a correction:</p>
+<table>
+<thead>
+<tr>
+<th>The model receives</th>
+<th>Right answer</th>
+<th>Correction?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>...&lt;|user|&gt;</td>
+<td>What</td>
+<td>no</td>
+</tr>
+<tr>
+<td>...What is water made</td>
+<td>of</td>
+<td>no</td>
+</tr>
+<tr>
+<td>...made of?&lt;|end|&gt;</td>
+<td>&lt;|assistant|&gt;</td>
+<td>no</td>
+</tr>
+<tr>
+<td>...&lt;|assistant|&gt;</td>
+<td>Water</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>...Water is made of hydrogen and</td>
+<td>oxygen</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>...and oxygen.</td>
+<td>&lt;|end|&gt;</td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p>The person's messages are part of the calculation (attention uses these tokens to calculate the sentence list), but the model isn't corrected to predict them. If it were, it would also learn to write questions, not only answers.</p>
+<p>In practice, the positions that don't produce a correction get a special marker in place of the right answer, and the loss calculation ignores those positions.</p>
+<p>The last row of the table matters: the model is corrected to predict &lt;|end|&gt; at the end of each answer. That is how it learns to finish its turn.</p>
+<h3>4.3 Smaller corrections and fewer rounds</h3>
+<p>The learning rate is lower than in pretraining, and so is the number of rounds. Large corrections, or many rounds over few examples, change the pretrained numbers too much, and the model loses part of what it had learned about language.</p>
+<p>On pocketchat:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Pretraining (Part 1)</th>
+<th>Fine-tuning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Peak learning rate</td>
+<td>0.001</td>
+<td>0.0001</td>
+</tr>
+<tr>
+<td>Rounds</td>
+<td>15,000</td>
+<td>1,632</td>
+</tr>
+<tr>
+<td>Examples per round</td>
+<td>64 pieces of 512 tokens</td>
+<td>32 conversations</td>
+</tr>
+<tr>
+<td>Time</td>
+<td>about 4 hours</td>
+<td>about 20 minutes</td>
+</tr>
+</tbody>
+</table>
+<p>The 1,632 rounds go through each training conversation three times. The loss on the conversations set aside for testing fell until round 1,000 (2.574) and then rose slightly (2.580 at the end). That is the first sign that the model is starting to memorize the training conversations instead of learning the general format. So the saved model is the one from round 1,000.</p>
+<h2>5. Chatting with the trained model</h2>
+<p>To chat, a program builds the sequence and calls the model for each message:</p>
+<ol>
+<li>The person's message is written in the format from section 2: &lt;|user|&gt;message&lt;|end|&gt;&lt;|assistant|&gt;.</li>
+<li>The model generates tokens, one by one, as in Part 1, section 6.</li>
+<li>When the model generates &lt;|end|&gt;, generation stops, and the generated text is shown as the answer.</li>
+<li>On the next message, the whole sequence (the earlier questions and answers) is sent again, with the new message at the end.</li>
+</ol>
+<p>Step 4 is how the model "remembers" the conversation: it keeps nothing between one message and the next; the program sends the history again each time. Since pocketchat only processes 512 tokens at once, longer conversations need their oldest messages removed.</p>
+<h2>6. What this stage teaches and what it doesn't</h2>
+<p>Fine-tuning teaches <strong>format</strong> and <strong>behavior</strong>: answering instead of continuing the text, ending the answer, following the style of the examples.</p>
+<p>It doesn't add knowledge. The information the model uses in its answers comes from pretraining, and fine-tuning can even reduce some of it. We measured this on pocketchat, with the same sentence beginnings from Part 1:</p>
+<table>
+<thead>
+<tr>
+<th>Sentence beginning</th>
+<th>Chance of oxygen before fine-tuning</th>
+<th>After fine-tuning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Water is made of hydrogen and</td>
+<td>52.9%</td>
+<td>28.8%</td>
+</tr>
+<tr>
+<td>Stars are made of hydrogen and</td>
+<td>38.4%</td>
+<td>15.8%</td>
+</tr>
+</tbody>
+</table>
+<p>Fine-tuning corrects the same parameters that hold the associations from pretraining, and the training conversations barely mention chemistry. Corrected toward the format of the conversations, these parameters lost part of what the model had learned about what water is made of. This effect is called <strong>forgetting</strong>, and it is one of the reasons for the lower learning rate and the small number of rounds in section 4.3.</p>
+<p>Wrong answers written with the same format and the same confidence as right ones are the <strong>hallucinations</strong> from Part 1. Section 7 shows several.</p>
+<p>Commercial assistants also go through a third stage, <strong>preference tuning</strong>. People compare pairs of answers and pick the better one, and the model is corrected to produce answers like the preferred ones. Methods used in this stage include RLHF (reinforcement learning from human feedback) and DPO (direct preference optimization). This is the stage where assistants learn, for example, to refuse dangerous requests and to admit when they don't know something.</p>
+<h2>7. Results</h2>
+<h3>7.1 The format: answers start to end</h3>
+<p>To measure the change in behavior, we asked the model the same 30 questions before and after fine-tuning, with the same sampling settings in both (temperature 0.7 and a light penalty for tokens that had already appeared in the answer) and a limit of 200 tokens per answer. Three measures:</p>
+<ul>
+<li>answers that end: how many close with &lt;|end|&gt; before the limit;</li>
+<li>average length: in tokens;</li>
+<li>repeated trigrams: the share of runs of three consecutive tokens that had already appeared in the same answer. It measures how much the text goes in circles.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Answers that end</th>
+<th>Average length</th>
+<th>Repeated trigrams</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>pretraining only</td>
+<td>0%</td>
+<td>200 tokens (all stop at the limit)</td>
+<td>66%</td>
+</tr>
+<tr>
+<td>after fine-tuning</td>
+<td>80%</td>
+<td>99 tokens</td>
+<td>6.7%</td>
+</tr>
+</tbody>
+</table>
+<p>The change in &lt;|end|&gt; also shows up in a direct measurement. After "&lt;|user|&gt;What is water made of?&lt;|end|&gt;&lt;|assistant|&gt;Water is made of hydrogen and oxygen.", the chance of the next token being &lt;|end|&gt; was 0.04% in the pretrained model and went up to 21.9% after fine-tuning.</p>
+<p>The loss on the assistant's messages, in the conversations set aside for testing, fell from 3.10 (pretrained model) to 2.574.</p>
+<h3>7.2 The content: the right format is not the right answer</h3>
+<p>Answers to "What is water made of?", in three draws.</p>
+<p>Before fine-tuning, the model doesn't recognize the conversation tokens and writes meaningless text, without stopping:
+".nichame.nichame.nichame.nichame.nichame.nichame..."</p>
+<p>After fine-tuning, all three answers end with &lt;|end|&gt; and have the form of an explanation, but none of them is about water:</p>
+<ul>
+<li>"Pyrotoxin is a chemical substance that has been used in medicine for thousands of years."</li>
+<li>"Turkey is a sporting and cricket game where the players wear a spear or gloves of a leather knot."</li>
+<li>"Oregano is a very versatile and high quality product made from 9% sulfur."</li>
+</ul>
+<p>Other answers from the final model, among the 30 questions:</p>
+<ul>
+<li>"What is the capital of France?" → "Capital of France is the capital of France."</li>
+<li>"Why is the sky blue?" → "The sky blue is blue because of the color green."</li>
+<li>"What were the main causes of World War I?" → a well-formatted numbered list that blames the war on the Soviet invasion of Afghanistan (which happened in 1979).</li>
+<li>"Recommend a healthy breakfast." → "...it's important to eat plenty of vegetables and fruits, and avoid coffee, soda, tea and other caffeine-based..." The advice on fruits and vegetables makes sense; it is one of the few answers with acceptable content.</li>
+</ul>
+<p>The result sums up the post: fine-tuning taught the model to answer and to stop, but the content depends on what pretraining left in the parameters, and in a model with 30 million parameters that is not much. Commercial assistants have thousands of times more parameters and are pretrained on thousands of times more text, which reduces these errors without eliminating them.</p>
+<h2>Glossary</h2>
+<ul>
+<li>Pretraining: the first stage of training, with all kinds of text.</li>
+<li>Supervised fine-tuning (SFT): the second stage, with example conversations, starting from the pretrained numbers.</li>
+<li>Special token: a token reserved to mark the structure of the conversation (&lt;|user|&gt;, &lt;|assistant|&gt;, &lt;|end|&gt;).</li>
+<li>Hallucination: a wrong answer written with the same form and confidence as a right one.</li>
+<li>Forgetting: losing part of what the model learned in one stage when the same parameters are corrected in another.</li>
+<li>Preference tuning: a stage in which the model is corrected based on comparisons between answers (RLHF, DPO).</li>
+</ul>
+<h2>Practice</h2>
+<ol>
+<li>Why can a pretrained model answer a question with another question?</li>
+<li>Why don't the person's messages produce corrections in fine-tuning?</li>
+<li>How does the model know when to end an answer?</li>
+<li>Does the model keep the conversation history between one message and the next?</li>
+<li>Does fine-tuning teach the model new facts?</li>
+</ol>
+<p>Answers:</p>
+<ol>
+<li>Because in the pretraining texts a question can be followed by another question, and the model calculates percentages that reflect all the continuations it has seen.</li>
+<li>Because the goal is for the model to learn to write answers. If it were corrected to predict the person's messages, it would also learn to write questions.</li>
+<li>It is corrected to predict the &lt;|end|&gt; token at the end of each answer; when this token is generated, the program stops generation.</li>
+<li>No. The program sends the whole conversation again with each message, up to the number of tokens the model processes at once.</li>
+<li>No. It changes the format of the answers; the content comes from pretraining. On pocketchat, it even lowered the chance of oxygen after "Water is made of hydrogen and" from 52.9% to 28.8% (forgetting).</li>
+</ol>
+<p>Source code for pocketchat: <a href="https://github.com/dedezza1D/pocketchat">github.com/dedezza1D/pocketchat</a></p><nav class="series"><a href="part-1-inside-the-model.html">← Part 1 — Inside the model</a><a href="index.html">Series index →</a></nav><footer>Written by Andrezza Medeiros Souza. Every number in this series was measured on <a href="https://github.com/dedezza1D/pocketchat">pocketchat</a>, a small GPT trained from scratch on a laptop. Code: <a href="https://github.com/dedezza1D/pocketchat">github.com/dedezza1D/pocketchat</a>.</footer></main></body></html>

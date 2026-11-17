@@ -1,0 +1,522 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Part 0 — The math of AI, without fear · Inside a ChatGPT</title>
+<meta name="description" content="The five operations behind a language model, measured on a small GPT trained from scratch: vectors, dot products, matrices, softmax and gradient descent.">
+<meta name="author" content="Andrezza Medeiros Souza">
+<link rel="canonical" href="https://dedezza1d.github.io/inside-a-chatgpt/part-0-the-math.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Part 0 — The math of AI, without fear · Inside a ChatGPT">
+<meta property="og:description" content="The five operations behind a language model, measured on a small GPT trained from scratch: vectors, dot products, matrices, softmax and gradient descent.">
+<meta property="og:url" content="https://dedezza1d.github.io/inside-a-chatgpt/part-0-the-math.html">
+<meta property="og:image" content="https://dedezza1d.github.io/inside-a-chatgpt/cover-part-0-the-math.png">
+<meta name="twitter:card" content="summary_large_image"><style>
+:root{--bg:#fbfaf8;--fg:#1d1a1b;--muted:#6b6264;--accent:#a3253b;--card:#f3eeec;--border:#e4dcda}
+@media (prefers-color-scheme:dark){:root{--bg:#121011;--fg:#efe8e2;--muted:#a89da0;--accent:#e2697d;--card:#1d1719;--border:#352c2f}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 Georgia,'Times New Roman',serif}
+main{max-width:740px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:2.1rem;line-height:1.2;margin:.2em 0 .4em}
+h2{margin-top:2.2em;font-size:1.45rem;border-bottom:1px solid var(--border);padding-bottom:.2em}
+h3{margin-top:1.6em;font-size:1.12rem;color:var(--accent)}
+a{color:var(--accent)}p,li{overflow-wrap:break-word}
+table{border-collapse:collapse;margin:1em 0;font-size:.9rem;display:block;overflow-x:auto;max-width:100%}
+th,td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}th{background:var(--card)}
+pre{background:var(--card);border:1px solid var(--border);padding:12px 14px;overflow-x:auto;border-radius:6px;font-size:.85rem;line-height:1.5}
+code{font-family:'Cascadia Mono',Consolas,'Courier New',monospace}
+.kicker{font:600 12px/1.4 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.meta{font:14px/1.5 system-ui,sans-serif;color:var(--muted)}
+nav.series{display:flex;justify-content:space-between;gap:16px;font:15px/1.4 system-ui,sans-serif;margin:28px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+nav.series a{text-decoration:none}nav.series a:hover{text-decoration:underline}
+footer{margin-top:48px;font:14px/1.6 system-ui,sans-serif;color:var(--muted)}
+ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
+</style></head><body><main><div class="kicker">Inside a ChatGPT · a series in three parts</div><nav class="series"><a href="index.html">← Series index</a><a href="part-1-inside-the-model.html">Part 1 — Inside the model →</a></nav><h1>Part 0 — The math of AI, without fear</h1>
+<p><em>Series "Inside a ChatGPT" · Part 0 of 3</em></p>
+<p>You don't need calculus or advanced algebra to understand how a language model works. It rests on five operations, and all of them come down to adding and multiplying.</p>
+<p>In this post, all five show up in a measured case. pocketchat is a small language model, built from scratch and trained on a laptop with English text. Part 1 shows how it was made. Given the start of a sentence</p>
+<pre><code>Water is made of hydrogen and
+</code></pre>
+<p>it calculates a percentage for every word that could come next:</p>
+<table>
+<thead>
+<tr>
+<th>Next word</th>
+<th>Percentage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>52.9%</td>
+</tr>
+<tr>
+<td>hydrogen</td>
+<td>6.6%</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>4.9%</td>
+</tr>
+<tr>
+<td>nitrogen</td>
+<td>3.5%</td>
+</tr>
+<tr>
+<td>table</td>
+<td>0.0001%</td>
+</tr>
+</tbody>
+</table>
+<p>Every number in sections 1 to 4 was measured on this model. Each section shows one of the operations that lead to these percentages.</p>
+<p>In this post:</p>
+<ol>
+<li>How a word is represented by numbers</li>
+<li>How to measure the similarity between two words</li>
+<li>How the model gives a score to each possible next word</li>
+<li>How the scores become percentages</li>
+<li>How the model corrects its own numbers</li>
+</ol>
+<p>Prerequisites: adding and multiplying. The code snippets are optional and use basic Python.</p>
+<h2>1. Words represented by numbers</h2>
+<p>A language model only does arithmetic, so every word has to be represented by numbers. In pocketchat, each word is a list of 512 numbers. The first four numbers of three of these lists:</p>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Position 1</th>
+<th>Position 2</th>
+<th>Position 3</th>
+<th>Position 4</th>
+<th>The rest</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>−0.012</td>
+<td>−0.022</td>
+<td>0.053</td>
+<td>0.054</td>
+<td>508 more numbers</td>
+</tr>
+<tr>
+<td>nitrogen</td>
+<td>−0.010</td>
+<td>0.007</td>
+<td>0.007</td>
+<td>−0.013</td>
+<td>508 more numbers</td>
+</tr>
+<tr>
+<td>table</td>
+<td>−0.066</td>
+<td>−0.052</td>
+<td>−0.005</td>
+<td>−0.063</td>
+<td>508 more numbers</td>
+</tr>
+</tbody>
+</table>
+<p>All words use the same 512 positions, in the same order. That is what makes it possible to compare them.</p>
+<p>A list of numbers with fixed positions is called a <strong>vector</strong>. In language models, a word's vector is called an <strong>embedding</strong>.</p>
+<p>About these lists:</p>
+<ul>
+<li>nobody defined what each position means. There is no "is a gas" position and no "is furniture" position;</li>
+<li>at the start of training, the 512 numbers of each word are random;</li>
+<li>during training, they are adjusted by the rule in section 5, with a single goal: predicting the next word.</li>
+</ul>
+<p>Looking at the numbers of a single list tells you nothing about the word. The information shows up when two lists are compared, which is the next operation.</p>
+<h2>2. Similarity between two words</h2>
+<p>To measure how similar two words are, multiply the number at each position of one list by the number at the same position of the other, and add up the results.</p>
+<p>With short lists, the whole calculation fits on one line:</p>
+<pre><code>[2, 0, 1] · [3, 4, 5] = (2 × 3) + (0 × 4) + (1 × 5) = 11
+</code></pre>
+<p>With pocketchat's lists, the calculation is the same, with 512 multiplications instead of three. For oxygen and nitrogen, it starts like this:</p>
+<pre><code>(−0.012 × −0.010) + (−0.022 × 0.007) + (0.053 × 0.007) + (0.054 × −0.013)
++ ... 508 more multiplications
+</code></pre>
+<p>The computer does the 512 multiplications and adds them up. The result for four pairs of words:</p>
+<table>
+<thead>
+<tr>
+<th>Pair</th>
+<th>Similarity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen · hydrogen</td>
+<td>0.64</td>
+</tr>
+<tr>
+<td>oxygen · nitrogen</td>
+<td>0.62</td>
+</tr>
+<tr>
+<td>oxygen · carbon</td>
+<td>0.46</td>
+</tr>
+<tr>
+<td>oxygen · table</td>
+<td>0.20</td>
+</tr>
+</tbody>
+</table>
+<p>The bigger the result, the more alike the lists. Each multiplication gives a positive number when both numbers have the same sign, and a negative one when the signs are opposite. The lists of oxygen and nitrogen have the same sign in 341 of the 512 positions. Those of oxygen and table, in 292.</p>
+<p>Nobody told the model that oxygen, hydrogen and nitrogen are chemical elements. The lists of these words became similar during training. Section 5 shows how.</p>
+<pre><code>def similarity(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+similarity([2, 0, 1], [3, 4, 5])   # 11
+</code></pre>
+<p>This operation is called the <strong>dot product</strong>. It is used in every section that follows, and in Part 1 it is the basis of the <strong>attention</strong> mechanism.</p>
+<h2>3. A score for each next word</h2>
+<p>When it reaches the end of "Water is made of hydrogen and", the model has already calculated a list of 512 numbers for the whole sentence, in the same positions as the word lists. Part 1 shows how this list is calculated. Its first four numbers:</p>
+<pre><code>sentence list: [2.324, −1.347, 0.371, 2.043, ... 508 more numbers]
+</code></pre>
+<p>The score of each candidate word is the similarity between the sentence list and the word's list, calculated as in section 2. For oxygen:</p>
+<pre><code>(2.324 × −0.012) + (−1.347 × −0.022) + (0.371 × 0.053) + (2.043 × 0.054)
++ ... 508 more multiplications
+= −0.028 + 0.030 + 0.020 + 0.110 + ...
+= 9.76
+</code></pre>
+<p>For table:</p>
+<pre><code>(2.324 × −0.066) + (−1.347 × −0.052) + (0.371 × −0.005) + (2.043 × −0.063)
++ ... 508 more multiplications
+= −0.153 + 0.070 − 0.002 − 0.129 + ...
+= −3.29
+</code></pre>
+<p>The scores of the five words in the opening table:</p>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Score</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>9.76</td>
+</tr>
+<tr>
+<td>hydrogen</td>
+<td>7.68</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>7.39</td>
+</tr>
+<tr>
+<td>nitrogen</td>
+<td>7.04</td>
+</tr>
+<tr>
+<td>table</td>
+<td>−3.29</td>
+</tr>
+</tbody>
+</table>
+<p>The oxygen list has the same sign as the sentence list in 308 of the 512 positions, so most of the multiplications give a positive number. The table list has the same sign in 234 positions and the opposite sign in 278, and the sum ends up negative. A negative score only means the word is an unlikely continuation.</p>
+<p>Notice how the calculations are organized: the word lists sit one below the other, forming a table, and each row is compared with the same sentence list. A table of numbers used this way is called a <strong>matrix</strong>. The operation, which produces a new list with one result per row, is <strong>matrix-vector multiplication</strong>.</p>
+<p>In pocketchat, this table has 8,192 rows, one for each word or piece of a word the model knows, and 512 columns. That is 4,194,304 numbers. The operation produces 8,192 scores, one for each possible next word.</p>
+<p>In a language model, this operation shows up in two kinds of places:</p>
+<ul>
+<li>In the last step, to give a score to each next word, as in this section.</li>
+<li>In the intermediate steps, other tables turn one list of numbers into another list. These are what the model uses to calculate the sentence list. Each of these tables is a <strong>layer</strong> of the neural network.</li>
+</ul>
+<p>All the numbers in the tables and in the word lists are the model's <strong>parameters</strong> (or <strong>weights</strong>). pocketchat has 29.9 million. "A 7-billion-parameter model" is a model that has 7 billion of these numbers. They all start out random and are adjusted during training.</p>
+<h2>4. From scores to percentages</h2>
+<p>The scores give the order of preference between the words, but they are not percentages. The conversion has two steps:</p>
+<ol>
+<li>Apply the exponential to each score: calculate e raised to the score, where e ≈ 2.718. The result is always positive, and each extra point of score multiplies the result by 2.718.</li>
+<li>Divide each result by the sum of the results for all 8,192 words. That way, the total comes to 100%.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Score</th>
+<th>e^score (step 1)</th>
+<th>Percentage (step 2)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>9.76</td>
+<td>17,405</td>
+<td>52.9%</td>
+</tr>
+<tr>
+<td>hydrogen</td>
+<td>7.68</td>
+<td>2,166</td>
+<td>6.6%</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>7.39</td>
+<td>1,624</td>
+<td>4.9%</td>
+</tr>
+<tr>
+<td>nitrogen</td>
+<td>7.04</td>
+<td>1,145</td>
+<td>3.5%</td>
+</tr>
+<tr>
+<td>table</td>
+<td>−3.29</td>
+<td>0.04</td>
+<td>0.0001%</td>
+</tr>
+<tr>
+<td>the other 8,187</td>
+<td></td>
+<td>10,569</td>
+<td>32.1%</td>
+</tr>
+<tr>
+<td>Sum</td>
+<td></td>
+<td>32,909</td>
+<td>100%</td>
+</tr>
+</tbody>
+</table>
+<p>Step 2 for oxygen: 17,405 ÷ 32,909 = 0.529, or 52.9%. The table shows the scores with two decimal places; step 1 was calculated with all of them.</p>
+<pre><code>import math
+
+def softmax(scores):
+    exps = [math.exp(s) for s in scores]
+    total = sum(exps)
+    return [e / total for e in exps]
+
+softmax([2.0, 1.0, 0.0])   # [0.665, 0.245, 0.090]
+</code></pre>
+<p>Because of step 1, differences in the scores become large differences in the percentages: oxygen's score is 2.08 points higher than hydrogen's, and its percentage is 8 times larger. Even so, no word ends up at 0%. Table gets 0.0001%.</p>
+<p>This conversion is called <strong>softmax</strong>. After it, the model draws the next word at random, following the percentages. In 100 draws, oxygen comes out about 53 times, hydrogen 7 and carbon 5. When carbon comes out, the model writes "Water is made of hydrogen and carbon", a wrong sentence. Part 1 comes back to this.</p>
+<h2>5. How the model corrects its own numbers</h2>
+<p>The lists in the previous sections are the result of training. At the start, all of them held random numbers. This section shows the rule that corrects these numbers with each training sentence.</p>
+<p>Following the correction of lists with 512 numbers by hand isn't practical. In this section only, the calculations use a reduced version: lists of two numbers and three words. The rule is the same one that trained pocketchat, and the starting values were drawn at random, as in a real model:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Starting list</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>sentence "hydrogen and"</td>
+<td>[0.5, 0.5]</td>
+</tr>
+<tr>
+<td>oxygen</td>
+<td>[0.2, −0.1]</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>[−0.3, 0.2]</td>
+</tr>
+<tr>
+<td>table</td>
+<td>[0.1, 0.3]</td>
+</tr>
+</tbody>
+</table>
+<h3>Before training</h3>
+<p>Scores (similarity with the sentence) and percentages (softmax):</p>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Score</th>
+<th>Percentage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>(0.5 × 0.2) + (0.5 × −0.1) = 0.05</td>
+<td>32.6%</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>(0.5 × −0.3) + (0.5 × 0.2) = −0.05</td>
+<td>29.5%</td>
+</tr>
+<tr>
+<td>table</td>
+<td>(0.5 × 0.1) + (0.5 × 0.3) = 0.20</td>
+<td>37.9%</td>
+</tr>
+</tbody>
+</table>
+<p>With random numbers, the most likely word after "hydrogen and" is table.</p>
+<h3>The correction rule</h3>
+<p>In pocketchat's training texts, "hydrogen and" appears 1,021 times. The next word is oxygen in 323 of them, carbon in 68 and table in none. Each occurrence produces a correction.</p>
+<p>Suppose the first training sentence ends in "hydrogen and oxygen". The right answer is oxygen. The correction goes like this:</p>
+<ul>
+<li>Right word: add to its list the sentence list multiplied by (1 − the percentage it got). Oxygen got 32.6%, so the multiplier is 1 − 0.326 = 0.674.</li>
+<li>Each wrong word: subtract from its list the sentence list multiplied by the percentage it got. Carbon got 29.5% (multiplier 0.295); table got 37.9% (multiplier 0.379).</li>
+</ul>
+<p>This rule wasn't picked by hand. It comes from calculating the <strong>gradient</strong> of the <strong>loss</strong> (the number that measures the model's error), and libraries like PyTorch calculate it automatically.</p>
+<h3>Correction 1: the right answer is oxygen</h3>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Calculation</th>
+<th>New list</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>[0.2, −0.1] + 0.674 × [0.5, 0.5] = [0.2 + 0.337, −0.1 + 0.337]</td>
+<td>[0.537, 0.237]</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>[−0.3, 0.2] − 0.295 × [0.5, 0.5] = [−0.3 − 0.148, 0.2 − 0.148]</td>
+<td>[−0.448, 0.052]</td>
+</tr>
+<tr>
+<td>table</td>
+<td>[0.1, 0.3] − 0.379 × [0.5, 0.5] = [0.1 − 0.189, 0.3 − 0.189]</td>
+<td>[−0.089, 0.111]</td>
+</tr>
+</tbody>
+</table>
+<p>New scores and percentages:</p>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Score</th>
+<th>Percentage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>0.387</td>
+<td>44.6%</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>−0.198</td>
+<td>24.8%</td>
+</tr>
+<tr>
+<td>table</td>
+<td>0.011</td>
+<td>30.6%</td>
+</tr>
+</tbody>
+</table>
+<p>Oxygen's score went from 0.05 to 0.387, and oxygen became the most likely word.</p>
+<h3>Why adding the sentence list raises the score</h3>
+<p>The score is the sum of "sentence number × word number", position by position. When a fraction of the sentence list is added to the word:</p>
+<ul>
+<li>in positions where the sentence has a positive number, the word's number goes up, and the product at that position goes up;</li>
+<li>in positions where the sentence has a negative number, the word's number goes down, and the product (negative × negative) also goes up.</li>
+</ul>
+<p>The score goes up at every position. In the example, oxygen's score went up by 0.674 × (0.5 × 0.5 + 0.5 × 0.5) = 0.674 × 0.5 = 0.337: from 0.05 to 0.387. By the same reasoning, subtracting the sentence list lowers the scores of the wrong words.</p>
+<p>The size of the correction depends on the error. If oxygen had gotten 95%, the multiplier would be 1 − 0.95 = 0.05, and oxygen's list would barely change. The more the model gets wrong, the bigger the correction.</p>
+<h3>Correction 2: the right answer is carbon</h3>
+<p>Now the training sentence ends in "hydrogen and carbon". The multipliers come from the percentages in the previous table:</p>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Calculation</th>
+<th>New list</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>carbon</td>
+<td>[−0.448, 0.052] + (1 − 0.248) × [0.5, 0.5]</td>
+<td>[−0.072, 0.428]</td>
+</tr>
+<tr>
+<td>oxygen</td>
+<td>[0.537, 0.237] − 0.446 × [0.5, 0.5]</td>
+<td>[0.314, 0.014]</td>
+</tr>
+<tr>
+<td>table</td>
+<td>[−0.089, 0.111] − 0.306 × [0.5, 0.5]</td>
+<td>[−0.242, −0.042]</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Score</th>
+<th>Percentage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>0.164</td>
+<td>36.4%</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>0.178</td>
+<td>36.9%</td>
+</tr>
+<tr>
+<td>table</td>
+<td>−0.142</td>
+<td>26.8%</td>
+</tr>
+</tbody>
+</table>
+<h3>The result</h3>
+<p>After two corrections:</p>
+<ul>
+<li>table had its list lowered both times and went from 37.9% to 26.8%. Nothing in the process says that a table isn't a chemical element: it lost probability because it wasn't the answer in either sentence;</li>
+<li>oxygen and carbon each received one addition of the same sentence list, and ended up nearly tied, at about 36% each.</li>
+</ul>
+<p>In pocketchat's training, this process was repeated hundreds of millions of times, with four differences from the reduced version:</p>
+<ol>
+<li>The multipliers are also multiplied by a small number called the <strong>learning rate</strong> (for example, 0.001). Each correction is much smaller than in the example.</li>
+<li>The sentence list is corrected too, by the same rule: a fraction of the right word's list is added to it, and fractions of the wrong words' lists are subtracted. The next time a similar sentence comes along, it produces better scores.</li>
+<li>All of the model's parameters are corrected, not just the word lists. PyTorch calculates the correction for each one.</li>
+<li>The right answers don't show up in equal amounts. After "hydrogen and", oxygen was the answer 323 times, and carbon 68. Oxygen received more additions, and in the trained model it has the higher score.</li>
+</ol>
+<p>The full procedure, in which each parameter is corrected in the direction that reduces the error, is called <strong>gradient descent</strong>.</p>
+<p>That is how the lists in section 1 got their values. Oxygen, hydrogen and nitrogen appear after the same kinds of sentence beginnings. Each time, the lists of all three receive additions of similar sentence lists, and so they become similar to each other: the similarity between oxygen and nitrogen is 0.62. Table appears after other sentence beginnings and receives additions of other lists: the similarity between oxygen and table is 0.20.</p>
+<h2>Summary</h2>
+<p>To complete "Water is made of hydrogen and", pocketchat:</p>
+<ol>
+<li>represents each word as a list of 512 numbers (a vector, or embedding);</li>
+<li>measures similarity by multiplying position by position and adding up (dot product);</li>
+<li>compares the sentence list with the list of each of the 8,192 words, in a table (matrix), and gets one score per word: 9.76 for oxygen, −3.29 for table;</li>
+<li>turns the scores into percentages (softmax) and draws the next word: 52.9% for oxygen;</li>
+<li>during training, added fractions of the sentence list to the right word's list and subtracted them from the wrong ones, in proportion to the error (gradient descent).</li>
+</ol>
+<h2>Practice</h2>
+<ol>
+<li>Calculate the similarity between the lists [1, 2, 3] and [4, 0, 2].</li>
+<li>In the table in section 4, the step 1 result for nitrogen is 1,145, and the sum is 32,909. Do step 2.</li>
+<li>If all 8,192 words got the same score, what would each one's percentage be?</li>
+<li>In section 5, if the model had given oxygen a 90% chance before correction 1, what number would the sentence list be multiplied by before being added to oxygen's list?</li>
+<li>Why did oxygen and carbon end section 5 with similar percentages?</li>
+</ol>
+<p>Answers:</p>
+<ol>
+<li>(1 × 4) + (2 × 0) + (3 × 2) = 10.</li>
+<li>1,145 ÷ 32,909 = 0.035, or 3.5%.</li>
+<li>100% ÷ 8,192 = 0.012% each. Equal scores give the same step 1 result, and dividing by the sum gives equal shares.</li>
+<li>1 − 0.90 = 0.10. The correction would be small, because the model was already almost right.</li>
+<li>Because, across the two corrections, the lists of oxygen and carbon received additions of the same sentence list, once each. Each had one addition (when it was the right answer) and one subtraction (when it wasn't), and both ended with close scores.</li>
+</ol>
+<p>Next post: in Part 1 — Inside the model, we follow the same sentence inside pocketchat: how the text is split into tokens, how the model calculates the sentence list using attention, and how training works in practice. <a href="https://dedezza1d.github.io/inside-a-chatgpt/part-1-inside-the-model.html">Read Part 1 — Inside the model</a></p><nav class="series"><a href="index.html">← Series index</a><a href="part-1-inside-the-model.html">Part 1 — Inside the model →</a></nav><footer>Written by Andrezza Medeiros Souza. Every number in this series was measured on <a href="https://github.com/dedezza1D/pocketchat">pocketchat</a>, a small GPT trained from scratch on a laptop. Code: <a href="https://github.com/dedezza1D/pocketchat">github.com/dedezza1D/pocketchat</a>.</footer></main></body></html>

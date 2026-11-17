@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inside a ChatGPT</title>
+<meta name="description" content="A three-part series on how a language model works, for people who are starting out and don&#x27;t have a math background. Every example and number comes from pocketchat, a 30M-parameter GPT I built and trained from scratch on a laptop GPU.">
+<meta name="author" content="Andrezza Medeiros Souza">
+<link rel="canonical" href="https://dedezza1d.github.io/inside-a-chatgpt/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Inside a ChatGPT">
+<meta property="og:description" content="A three-part series on how a language model works, for people who are starting out and don&#x27;t have a math background. Every example and number comes from pocketchat, a 30M-parameter GPT I built and trained from scratch on a laptop GPU.">
+<meta property="og:url" content="https://dedezza1d.github.io/inside-a-chatgpt/">
+<meta property="og:image" content="https://dedezza1d.github.io/inside-a-chatgpt/cover-part-0-the-math.png">
+<meta name="twitter:card" content="summary_large_image"><style>
+:root{--bg:#fbfaf8;--fg:#1d1a1b;--muted:#6b6264;--accent:#a3253b;--card:#f3eeec;--border:#e4dcda}
+@media (prefers-color-scheme:dark){:root{--bg:#121011;--fg:#efe8e2;--muted:#a89da0;--accent:#e2697d;--card:#1d1719;--border:#352c2f}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 Georgia,'Times New Roman',serif}
+main{max-width:740px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:2.1rem;line-height:1.2;margin:.2em 0 .4em}
+h2{margin-top:2.2em;font-size:1.45rem;border-bottom:1px solid var(--border);padding-bottom:.2em}
+h3{margin-top:1.6em;font-size:1.12rem;color:var(--accent)}
+a{color:var(--accent)}p,li{overflow-wrap:break-word}
+table{border-collapse:collapse;margin:1em 0;font-size:.9rem;display:block;overflow-x:auto;max-width:100%}
+th,td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}th{background:var(--card)}
+pre{background:var(--card);border:1px solid var(--border);padding:12px 14px;overflow-x:auto;border-radius:6px;font-size:.85rem;line-height:1.5}
+code{font-family:'Cascadia Mono',Consolas,'Courier New',monospace}
+.kicker{font:600 12px/1.4 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.meta{font:14px/1.5 system-ui,sans-serif;color:var(--muted)}
+nav.series{display:flex;justify-content:space-between;gap:16px;font:15px/1.4 system-ui,sans-serif;margin:28px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+nav.series a{text-decoration:none}nav.series a:hover{text-decoration:underline}
+footer{margin-top:48px;font:14px/1.6 system-ui,sans-serif;color:var(--muted)}
+ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
+</style></head><body><main><div class="kicker">Series</div><h1>Inside a ChatGPT</h1><p>A three-part series on how a language model works, for people who are starting out and don't have a math background. Every example and number comes from pocketchat, a 30M-parameter GPT I built and trained from scratch on a laptop GPU.</p><ol class="toc"><li><a href="part-0-the-math.html">Part 0 — The math of AI, without fear</a><span class="meta">The five operations behind a language model, measured on a small GPT trained from scratch: vectors, dot products, matrices, softmax and gradient descent.</span></li><li><a href="part-1-inside-the-model.html">Part 1 — Inside the model</a><span class="meta">Tokens, attention, blocks and training, following one sentence through a 30M-parameter GPT trained on a laptop.</span></li><li><a href="part-2-teaching-it-to-chat.html">Part 2 — Teaching the model to chat</a><span class="meta">Chat fine-tuning on a small GPT: special tokens, loss masking, what it teaches, and the forgetting it causes.</span></li></ol><footer>Written by Andrezza Medeiros Souza. Every number in this series was measured on <a href="https://github.com/dedezza1D/pocketchat">pocketchat</a>, a small GPT trained from scratch on a laptop. Code: <a href="https://github.com/dedezza1D/pocketchat">github.com/dedezza1D/pocketchat</a>.</footer></main></body></html>

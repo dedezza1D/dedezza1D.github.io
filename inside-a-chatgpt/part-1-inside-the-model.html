@@ -1,0 +1,415 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Part 1 — Inside the model · Inside a ChatGPT</title>
+<meta name="description" content="Tokens, attention, blocks and training, following one sentence through a 30M-parameter GPT trained on a laptop.">
+<meta name="author" content="Andrezza Medeiros Souza">
+<link rel="canonical" href="https://dedezza1d.github.io/inside-a-chatgpt/part-1-inside-the-model.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Part 1 — Inside the model · Inside a ChatGPT">
+<meta property="og:description" content="Tokens, attention, blocks and training, following one sentence through a 30M-parameter GPT trained on a laptop.">
+<meta property="og:url" content="https://dedezza1d.github.io/inside-a-chatgpt/part-1-inside-the-model.html">
+<meta property="og:image" content="https://dedezza1d.github.io/inside-a-chatgpt/cover-part-1-inside-the-model.png">
+<meta name="twitter:card" content="summary_large_image"><style>
+:root{--bg:#fbfaf8;--fg:#1d1a1b;--muted:#6b6264;--accent:#a3253b;--card:#f3eeec;--border:#e4dcda}
+@media (prefers-color-scheme:dark){:root{--bg:#121011;--fg:#efe8e2;--muted:#a89da0;--accent:#e2697d;--card:#1d1719;--border:#352c2f}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 Georgia,'Times New Roman',serif}
+main{max-width:740px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:2.1rem;line-height:1.2;margin:.2em 0 .4em}
+h2{margin-top:2.2em;font-size:1.45rem;border-bottom:1px solid var(--border);padding-bottom:.2em}
+h3{margin-top:1.6em;font-size:1.12rem;color:var(--accent)}
+a{color:var(--accent)}p,li{overflow-wrap:break-word}
+table{border-collapse:collapse;margin:1em 0;font-size:.9rem;display:block;overflow-x:auto;max-width:100%}
+th,td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}th{background:var(--card)}
+pre{background:var(--card);border:1px solid var(--border);padding:12px 14px;overflow-x:auto;border-radius:6px;font-size:.85rem;line-height:1.5}
+code{font-family:'Cascadia Mono',Consolas,'Courier New',monospace}
+.kicker{font:600 12px/1.4 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.meta{font:14px/1.5 system-ui,sans-serif;color:var(--muted)}
+nav.series{display:flex;justify-content:space-between;gap:16px;font:15px/1.4 system-ui,sans-serif;margin:28px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+nav.series a{text-decoration:none}nav.series a:hover{text-decoration:underline}
+footer{margin-top:48px;font:14px/1.6 system-ui,sans-serif;color:var(--muted)}
+ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
+</style></head><body><main><div class="kicker">Inside a ChatGPT · a series in three parts</div><nav class="series"><a href="part-0-the-math.html">← Part 0 — The math of AI, without fear</a><a href="part-2-teaching-it-to-chat.html">Part 2 — Teaching the model to chat →</a></nav><h1>Part 1 — Inside the model</h1>
+<p><em>Series "Inside a ChatGPT" · Part 1 of 3</em></p>
+<p>In Part 0, we followed pocketchat as it completed "Water is made of hydrogen and" and saw the five operations it uses: representing words as lists of numbers, measuring similarity, giving a score to each next word, turning scores into percentages and correcting the numbers based on its errors. One question was left open: how does the model calculate the sentence list? This post answers it and shows the full model.</p>
+<p>pocketchat is a model built from scratch and trained on a laptop with an ordinary graphics card (RTX 4060, 8 GB). It has about 30 million parameters, thousands of times fewer than commercial models, and it uses the same architecture.</p>
+<p>In this post:</p>
+<ol>
+<li>The task a language model solves</li>
+<li>How text is split into tokens</li>
+<li>Where the training examples come from</li>
+<li>The path of a sentence through the model</li>
+<li>How training works</li>
+<li>How the model generates text</li>
+<li>What pocketchat learned</li>
+<li>What it still needs to answer questions</li>
+</ol>
+<p>Prerequisites: Part 0.</p>
+<h2>1. The task: predicting the next word</h2>
+<p>A language model solves a single task: given a text, calculate the percentage of each possible next word. To write a reply, it draws a word, appends it to the text and repeats the calculation for the following word, until it is done.</p>
+<p>Predicting the next word well takes information of several kinds:</p>
+<ul>
+<li>completing "Water is made of hydrogen and" takes a fact;</li>
+<li>completing "The keys to the cabinet" with "are" and not "is" takes grammar: the verb agrees with "keys", not with "cabinet";</li>
+<li>completing "2 + 2 =" takes arithmetic.</li>
+</ul>
+<p>Because the model is trained to predict the next word in all kinds of text, its numbers end up holding the grammar, facts and patterns present in those texts.</p>
+<h2>2. Splitting text into tokens</h2>
+<p>In Part 0, each word had a list of numbers. In practice, models work with <strong>tokens</strong>: pieces of text that can be a whole word, part of a word or a punctuation mark. The program that splits the text is called a <strong>tokenizer</strong>.</p>
+<p>pocketchat's tokenizer splits the sentence from Part 0 into seven tokens:</p>
+<pre><code>W | ater | is | made | of | hydrogen | and
+</code></pre>
+<p>The space before a word is part of that word's token. In the middle of a text, " Water" (with the space) is a single token. At the start of the text, with no space before it, the same word is made of two pieces, "W" and "ater".</p>
+<p>The size of the pieces is a choice:</p>
+<ul>
+<li>letters: the sequences get very long;</li>
+<li>whole words: the vocabulary gets huge, and a new word has no list;</li>
+<li>pieces of words: frequent words become a single token (hydrogen, oxygen), and rare words are made of pieces (helium = hel + ium; photosynthesis = phot + osy + nt + hesis). This is the choice used in practice.</li>
+</ul>
+<p>The tokenizer finds the pieces from a large amount of text by repeating this procedure:</p>
+<ol>
+<li>count how many times each pair of neighboring pieces appears in the text;</li>
+<li>merge the most frequent pair into a new piece;</li>
+<li>go back to step 1, until there are as many pieces as wanted.</li>
+</ol>
+<p>In pocketchat's tokenizer, the first five merges were: space + t, space + a, h + e, i + n and r + e. The sixth merged two pieces created earlier, " t" and "he", into " the", the most common word in English. The tokenizer starts with the 256 possible values of a byte, so any text can be split, even one with unknown words.</p>
+<p>This method is called BPE (Byte Pair Encoding). pocketchat's tokenizer made 7,932 merges in about a minute, from 40 thousand texts. Together with the 256 starting values and 4 special tokens, which show up in Part 2, they make up the model's 8,192 tokens. On average, a token is four letters long.</p>
+<p>These 8,192 tokens are what get a score in the model's last step (Part 0, section 3). That is why the candidates to complete the sentence from Part 0 also include pieces of words: in sixth place is " hel", the start of helium, with 1.8%.</p>
+<h2>3. The training examples come from the text itself</h2>
+<p>To train, the model needs examples with a right answer, like "hydrogen and → oxygen" in Part 0. Any sentence already contains several of them:</p>
+<pre><code>Sentence: "Water is made of hydrogen and oxygen"
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>The model receives</th>
+<th>Right answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Water is</td>
+<td>made</td>
+</tr>
+<tr>
+<td>Water is made</td>
+<td>of</td>
+</tr>
+<tr>
+<td>Water is made of</td>
+<td>hydrogen</td>
+</tr>
+<tr>
+<td>Water is made of hydrogen</td>
+<td>and</td>
+</tr>
+<tr>
+<td>Water is made of hydrogen and</td>
+<td>oxygen</td>
+</tr>
+</tbody>
+</table>
+<p>Every position in the text is an example, and the answer is the next token. That is why training can use large amounts of text without anyone writing answers. pocketchat used about 480 million tokens of educational text in English.</p>
+<p>In these texts, "hydrogen and" appears 1,021 times. The next word is oxygen in 323 of them, helium in 185 and carbon in 68. The model doesn't receive this count. It receives the texts, one position at a time, and the correction rule from Part 0 (section 5) is applied at each position.</p>
+<p>A small share of the texts (0.5%) is set aside and never used for corrections. It is used to measure the model's error on texts it has never seen. If this error falls along with the error on the training texts, the model is learning patterns that hold for new texts.</p>
+<h2>4. The path of a sentence through the model</h2>
+<h3>4.1 Each token gets its list of numbers</h3>
+<p>The first step is the one from Part 0, section 1: each token in the sentence is replaced by its list of numbers (<strong>embedding</strong>). In pocketchat, each list has 512 numbers. They start out random and are corrected during training.</p>
+<h3>4.2 Attention: how the sentence becomes a list</h3>
+<p>In Part 0, the list for the sentence "Water is made of hydrogen and" gave the highest score to oxygen. This list is calculated at the last position of the sentence, the position of the token "and". On its own, "and" says nothing about chemistry: the information is in earlier tokens, like "hydrogen" and "Water". <strong>attention</strong> is the calculation that brings numbers from those tokens to the last position.</p>
+<p>The calculation, for each token in the sentence:</p>
+<ol>
+<li>Three tables of numbers (matrices, Part 0, section 3) turn each token's list into three new lists:<ul>
+<li><strong>query</strong>: used to give scores to the other tokens;</li>
+<li><strong>key</strong>: used to receive scores from the other tokens;</li>
+<li><strong>value</strong>: the numbers the token passes on.</li>
+</ul>
+</li>
+<li>The current token's query is compared with the key of each earlier token, by dot product (Part 0, section 2). Each comparison gives a score.</li>
+<li>The scores become percentages through softmax (Part 0, section 4).</li>
+<li>The current token's new list is the sum of the value lists of the earlier tokens, each multiplied by its percentage.</li>
+</ol>
+<p>An example for the token "and", with lists of two numbers and only three tokens. The numbers were chosen so the calculation fits here; the operation is the same as in the model:</p>
+<table>
+<thead>
+<tr>
+<th>Token</th>
+<th>Key</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Water</td>
+<td>[0.5, 0.5]</td>
+<td>[0.5, 0.2]</td>
+</tr>
+<tr>
+<td>hydrogen</td>
+<td>[1, 0]</td>
+<td>[1, 0]</td>
+</tr>
+<tr>
+<td>and</td>
+<td>[0, 1]</td>
+<td>[0, 0]</td>
+</tr>
+</tbody>
+</table>
+<p>Query of "and": [1, 0]</p>
+<ul>
+<li>Scores: Water = (1 × 0.5) + (0 × 0.5) = 0.5; hydrogen = (1 × 1) + (0 × 0) = 1; and = (1 × 0) + (0 × 1) = 0.</li>
+<li>Percentages (softmax of 0.5, 1 and 0): 30.7%, 50.6% and 18.6%.</li>
+<li>New list for "and": 0.307 × [0.5, 0.2] + 0.506 × [1, 0] + 0.186 × [0, 0] = [0.66, 0.06].</li>
+</ul>
+<p>The list for "and", which on its own was [0, 0], now holds numbers that came from "Water" and "hydrogen". That is how information from several words reaches the last position of the sentence.</p>
+<p>Since the query, key and value tables are parameters, they start out random and are corrected during training by the rule from Part 0, section 5. The corrections are what make a token's query give high scores to the tokens that help predict the next word.</p>
+<p>Three details complete the calculation:</p>
+<ul>
+<li>Each token only compares its query with the keys of earlier tokens (and its own). If it could use the next token, the model would have access to the answer during training.</li>
+<li>pocketchat does this calculation 8 times in parallel, with 8 different sets of tables, called <strong>heads</strong>. Each head produces a list, and the 8 lists are joined together.</li>
+<li>The dot product doesn't depend on the order of the tokens: "dog bites man" and "man bites dog" would get the same scores. So, before the comparison, the numbers in the query and key lists are changed by a calculation that depends on the token's position in the sentence (the technique pocketchat uses is called RoPE). With that, the score between two tokens also depends on the distance between them.</li>
+</ul>
+<h3>What the measurements show in pocketchat</h3>
+<p>In pocketchat, attention is calculated 64 times for each token: 8 heads in each of the 8 blocks (section 4.4). In each of them, we can measure the percentage the token "and" gives to each token in the sentence. Three examples:</p>
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>Token with the highest percentage</th>
+<th>Percentage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>block 6, head 4</td>
+<td>hydrogen</td>
+<td>96.8%</td>
+</tr>
+<tr>
+<td>block 7, head 2</td>
+<td>hydrogen</td>
+<td>94.4%</td>
+</tr>
+<tr>
+<td>block 7, head 8</td>
+<td>W (the start of Water)</td>
+<td>98.6%</td>
+</tr>
+</tbody>
+</table>
+<p>In 17 of the 64 heads, the token with the highest percentage is "hydrogen". In 14, it is "W". These measurements show where each head takes numbers from, not what the model does with them afterwards.</p>
+<p>The effect of the earlier tokens shows up when the start of the sentence changes:</p>
+<table>
+<thead>
+<tr>
+<th>Text received</th>
+<th>Percentage for oxygen</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>hydrogen and</td>
+<td>12.2%</td>
+</tr>
+<tr>
+<td>Stars are made of hydrogen and</td>
+<td>38.4%</td>
+</tr>
+<tr>
+<td>Water is made of hydrogen and</td>
+<td>52.9%</td>
+</tr>
+</tbody>
+</table>
+<p>All three texts end the same way. The difference in the percentages comes from the earlier tokens, and attention is the only calculation in the model in which the list at one position receives numbers from other positions.</p>
+<h3>4.3 Processing each token</h3>
+<p>After attention, each token's list goes through more tables (layers, Part 0, section 3), which turn the list of 512 numbers into another list of 512 numbers. Between these tables there is a calculation that is neither multiplication nor addition (an <strong>activation function</strong>): without it, several tables in a row would have the same effect as a single table. Studies of how these models work internally indicate that much of the association between words and facts is stored in these tables.</p>
+<h3>4.4 Stacked blocks</h3>
+<p>Attention followed by processing forms a <strong>block</strong>. pocketchat has 8 blocks in sequence; commercial models have dozens. Each block receives the lists produced by the previous one.</p>
+<p>In each block, the result of attention and the result of processing are <strong>added</strong> to the list that came in, instead of replacing it. This keeps what the earlier blocks calculated, and it is what makes it possible to train models with many blocks.</p>
+<p>Counting all the numbers in the token lists and in all the tables, pocketchat has 29.9 million parameters.</p>
+<h3>4.5 The prediction</h3>
+<p>After the last block, the list at the last position of the sentence is the sentence list: the one that starts with [2.324, −1.347, 0.371, 2.043] in Part 0. From there, the calculation is the one from Part 0. The sentence list is compared with the list of each of the 8,192 tokens, which gives a score for each possible next word, and softmax turns the scores into percentages.</p>
+<h2>5. Training in practice</h2>
+<p>Training applies the rule from Part 0, section 5, to all 29.9 million parameters:</p>
+<ol>
+<li>The model receives pieces of text and calculates the next-word percentages at each position.</li>
+<li>The <strong>loss</strong>, the number that measures the error, is calculated.</li>
+<li>PyTorch calculates the correction for each parameter (the gradient).</li>
+<li>Each parameter is corrected, with the correction multiplied by the learning rate.</li>
+</ol>
+<p>In pocketchat, each round uses about 32 thousand tokens, and the full training run has 15 thousand rounds.</p>
+<h3>How to read the loss</h3>
+<p>The loss is calculated from the percentage the model gave to the right word: it is zero if the model gave 100%, and it grows as that percentage shrinks. In the sentence from Part 0, if the right word is oxygen (52.9%), the loss at that position is 0.64. If it is table (0.0001%), it is 13.7. The model's loss is the average over all positions.</p>
+<p>A more intuitive way to read the loss is the <strong>perplexity</strong> (e raised to the loss): the number of options the model is splitting its chance between, on average.</p>
+<ul>
+<li>At the start, the loss was 9.1. A model that splits the chance equally across the 8,192 tokens has a loss of 9.01.</li>
+<li>The table below shows the loss on the texts set aside for testing:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Round</th>
+<th>Loss</th>
+<th>Perplexity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>9.10</td>
+<td>~8,950</td>
+</tr>
+<tr>
+<td>500</td>
+<td>4.58</td>
+<td>97</td>
+</tr>
+<tr>
+<td>1,000</td>
+<td>4.08</td>
+<td>59</td>
+</tr>
+<tr>
+<td>3,000</td>
+<td>3.66</td>
+<td>39</td>
+</tr>
+<tr>
+<td>5,000</td>
+<td>3.54</td>
+<td>34</td>
+</tr>
+<tr>
+<td>10,000</td>
+<td>3.36</td>
+<td>29</td>
+</tr>
+<tr>
+<td>15,000</td>
+<td>3.24</td>
+<td>26</td>
+</tr>
+</tbody>
+</table>
+<p>By the end of training, the model splits the chance, on average, between about 26 options instead of 8,192. Most of the drop happens in the first thousand rounds; after that, each round improves the model less and less.</p>
+<p>During training, the test loss was measured on a sample drawn at random for each measurement (about 13% of the test texts). Because of that, near the end, consecutive measurements went up and down by a few hundredths, and there was no way to tell which round was better. The final value in the table was measured on all the test texts, always on the same pieces: 3.24, perplexity 25.6. To compare models with small differences, the measurement has to be made on the same set every time.</p>
+<h3>Adjustments that make training possible on a laptop</h3>
+<ul>
+<li>Variable learning rate: it starts near zero, rises over the first 300 rounds and then decreases gradually until the end. At the start, the parameters are random, and large corrections would destabilize training.</li>
+<li>Periodic saving: every 500 rounds, all the parameters and the training state are written to disk. If the computer shuts down, training continues from the last save.</li>
+<li>Memory savings: each round is processed in four parts, and the calculations use numbers with fewer decimal places. Training takes 3.2 GB of the graphics card's 8 GB.</li>
+</ul>
+<p>The full training run took about 4 hours on this laptop. For a model the size of the commercial ones, the same laptop would take years; that is why those models are trained on thousands of graphics cards at the same time.</p>
+<h2>6. How the model generates text</h2>
+<p>To generate text, the model repeats:</p>
+<ol>
+<li>calculate the next-word percentages;</li>
+<li>draw a word following those percentages;</li>
+<li>append the word to the text.</li>
+</ol>
+<p>Drawing at random, instead of always picking the word with the highest percentage, avoids repetitive text. It is also why the same question can get different answers.</p>
+<p>The draw is controlled by the <strong>temperature</strong>: before softmax, all the scores are divided by the temperature.</p>
+<ul>
+<li>Temperature 0.5: the scores become twice as large, and so do the differences between them. The word with the highest score gets an even higher percentage.</li>
+<li>Temperature 2: the scores are halved, and the percentages become more alike. Words with lower scores are drawn more often.</li>
+</ul>
+<p>Measured on pocketchat, with the sentence from Part 0:</p>
+<table>
+<thead>
+<tr>
+<th>Temperature</th>
+<th>oxygen</th>
+<th>hydrogen</th>
+<th>carbon</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.5</td>
+<td>96.4%</td>
+<td>1.5%</td>
+<td>0.8%</td>
+</tr>
+<tr>
+<td>1</td>
+<td>52.9%</td>
+<td>6.6%</td>
+<td>4.9%</td>
+</tr>
+<tr>
+<td>2</td>
+<td>3.6%</td>
+<td>1.3%</td>
+<td>1.1%</td>
+</tr>
+</tbody>
+</table>
+<p>At temperature 2, oxygen is still in first place, but with 3.6%: the chance spreads across the 8,192 tokens. At temperature 0.5, the model writes oxygen in 96 out of 100 draws.</p>
+<h2>7. What pocketchat learned</h2>
+<p>We asked the model to continue "The water cycle" at three points in training.</p>
+<p>Round ~300 (about 10 million tokens):
+"The water cycle is that the water is that the blood is often used to make a condition..."</p>
+<p>Round 500 (about 16 million tokens):
+"The water cycle, or even in the waters, is located in the shade of sandy rocks in the waters with water, and it is often moved in the water..."</p>
+<p>Round 10,000 (about 330 million tokens):
+"The water cycle is not just about water management. It is about how the cycle relates to the overall water cycle. The water cycle is about how the water cycle works."</p>
+<p>The progression follows a known order:</p>
+<ol>
+<li>first, the model learns which words are frequent;</li>
+<li>then, how to form grammatically correct sentences;</li>
+<li>next, how to stay on topic (all the samples are about the water cycle);</li>
+<li>last, and only in larger models, correct facts and reasoning.</li>
+</ol>
+<p>At round 10,000, the sentences are grammatically correct and stay on topic, but they repeat the same idea without adding information. Repetition is common in models of this size.</p>
+<h3>Right and wrong in the same sentence</h3>
+<p>With the sentence from Part 0, the final model wrote, in two draws (temperature 0.8):</p>
+<p>"Water is made of hydrogen and oxygen. The mixture is then divided into two groups: the hydrogen and oxygen."</p>
+<p>"Water is made of hydrogen and hydrides; the water and the hydrillic acid is the main part of the water, which can occur in every cell of the body"</p>
+<p>In the first draw, oxygen came out. In the second, " hyd" came out, a token that had a 0.7% chance, and the model continued the text from there. The result has the shape of a science text and uses a word that doesn't exist ("hydrillic").</p>
+<p>The sentence from the first draw wasn't in the training texts to be memorized: in them, the sequence "is made of hydrogen and" appears only once, and it continues with helium. Section 4.2 shows where the right answer comes from: "hydrogen and" alone gives oxygen 12.2%, and the beginning "Water is made of" raises that to 52.9%.</p>
+<h3>The limits of a model this size</h3>
+<p>This combination fails in less frequent cases. Stars are made of hydrogen and helium, but for "Stars are made of hydrogen and", pocketchat gives oxygen 38.4% and " hel", the start of helium, 4.6%.</p>
+<p>Given the beginning "The French Revolution", it wrote:
+"The French Revolution in 1930, in which the United States was defeated on the 11th of July, 1933, and the French Revolution in December of that year, the United States declared war against France..."</p>
+<p>The text has the format of a history paragraph (dates, a war, a declaration), but the facts are wrong: the French Revolution began in 1789. The model learned which words tend to appear in texts about revolutions and wars, and didn't store the correct facts. This kind of error, written in the same form as a correct text, is called a <strong>hallucination</strong>. It happens in large models too, less often.</p>
+<h2>8. From model to assistant</h2>
+<p>pocketchat calculates the next word for any text, but it doesn't answer questions. Two examples, with the final model:</p>
+<ul>
+<li>Given "What is the capital of France?", it continued with "?? 12. What is the value of a dollar???". The model treated the question as an item in a list of exercises and wrote the next question.</li>
+<li>Given "What is water made of?", it continued with "These are the steps you will take to make the water more water efficient.", the start of a set of instructions.</li>
+</ul>
+<p>To answer questions, the model goes through a second stage of training, with example conversations. That is the subject of Part 2.</p>
+<h2>Glossary</h2>
+<ul>
+<li>Token: a piece of text the model works with (a word, part of a word or a symbol).</li>
+<li>Tokenizer: the program that splits text into tokens.</li>
+<li>Embedding: a token's list of numbers.</li>
+<li>Parameters (weights): all the numbers in the model that are corrected during training.</li>
+<li>Attention: the calculation that combines the lists of earlier tokens into the current token's list.</li>
+<li>Query, key, value: the three lists each token produces for the attention calculation.</li>
+<li>Head: each of the attention calculations done in parallel within a block.</li>
+<li>Block: attention followed by processing; the model uses several in sequence.</li>
+<li>Loss: the number that measures the error of the predictions.</li>
+<li>Perplexity: e raised to the loss; the number of options the model splits its chance between, on average.</li>
+<li>Temperature: the number the scores are divided by before softmax when generating text.</li>
+<li>Hallucination: wrong text written in the same form as correct text.</li>
+</ul>
+<h2>Practice</h2>
+<ol>
+<li>Why can a language model be trained without anyone writing answers?</li>
+<li>In the attention example in section 4.2, with lists of two numbers, which token got the highest percentage? Why?</li>
+<li>Why can each token only use earlier tokens in the attention calculation?</li>
+<li>A model has a perplexity of 29. What does this number tell you?</li>
+<li>In the table in section 6, what happens to oxygen's percentage when the temperature drops from 1 to 0.5? Why?</li>
+</ol>
+<p>Answers:</p>
+<ol>
+<li>Because every position in a text is a prediction example, and the answer is the next token, which is already in the text.</li>
+<li>"hydrogen", with 50.6%. The key of "hydrogen" ([1, 0]) is the most similar to the query of "and" ([1, 0]), so the dot product gives the highest score (1).</li>
+<li>Because the model is trained to predict the next word. If it could use the next word, it would have access to the answer.</li>
+<li>That, on average, the model splits its chance between about 29 options for the next word, instead of the 8,192 in its vocabulary.</li>
+<li>It goes up from 52.9% to 96.4%. Dividing the scores by 0.5 doubles all of them and doubles the differences between them too, and softmax turns bigger differences into more unequal percentages.</li>
+</ol>
+<p>Next post: in Part 2 — Teaching the model to chat, pocketchat goes through a second stage of training, with example conversations, and starts answering questions. <a href="https://dedezza1d.github.io/inside-a-chatgpt/part-2-teaching-it-to-chat.html">Read Part 2 — Teaching the model to chat</a></p>
+<p>Source code for pocketchat: <a href="https://github.com/dedezza1D/pocketchat">github.com/dedezza1D/pocketchat</a></p><nav class="series"><a href="part-0-the-math.html">← Part 0 — The math of AI, without fear</a><a href="part-2-teaching-it-to-chat.html">Part 2 — Teaching the model to chat →</a></nav><footer>Written by Andrezza Medeiros Souza. Every number in this series was measured on <a href="https://github.com/dedezza1D/pocketchat">pocketchat</a>, a small GPT trained from scratch on a laptop. Code: <a href="https://github.com/dedezza1D/pocketchat">github.com/dedezza1D/pocketchat</a>.</footer></main></body></html>
