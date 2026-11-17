@@ -1,0 +1,523 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parte 0 — A matemática da IA sem medo · Como um ChatGPT funciona por dentro</title>
+<meta name="description" content="As cinco operações por trás de um modelo de linguagem, medidas num GPT pequeno treinado do zero: vetores, produto escalar, matrizes, softmax e descida de gradiente.">
+<meta name="author" content="Andrezza Medeiros Souza">
+<link rel="canonical" href="https://dedezza1d.github.io/como-um-chatgpt-funciona/parte-0-matematica.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Parte 0 — A matemática da IA sem medo · Como um ChatGPT funciona por dentro">
+<meta property="og:description" content="As cinco operações por trás de um modelo de linguagem, medidas num GPT pequeno treinado do zero: vetores, produto escalar, matrizes, softmax e descida de gradiente.">
+<meta property="og:url" content="https://dedezza1d.github.io/como-um-chatgpt-funciona/parte-0-matematica.html">
+<meta property="og:image" content="https://dedezza1d.github.io/como-um-chatgpt-funciona/cover-parte-0-matematica.png">
+<meta name="twitter:card" content="summary_large_image"><style>
+:root{--bg:#fbfaf8;--fg:#1d1a1b;--muted:#6b6264;--accent:#a3253b;--card:#f3eeec;--border:#e4dcda}
+@media (prefers-color-scheme:dark){:root{--bg:#121011;--fg:#efe8e2;--muted:#a89da0;--accent:#e2697d;--card:#1d1719;--border:#352c2f}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 Georgia,'Times New Roman',serif}
+main{max-width:740px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:2.1rem;line-height:1.2;margin:.2em 0 .4em}
+h2{margin-top:2.2em;font-size:1.45rem;border-bottom:1px solid var(--border);padding-bottom:.2em}
+h3{margin-top:1.6em;font-size:1.12rem;color:var(--accent)}
+a{color:var(--accent)}p,li{overflow-wrap:break-word}
+table{border-collapse:collapse;margin:1em 0;font-size:.9rem;display:block;overflow-x:auto;max-width:100%}
+th,td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}th{background:var(--card)}
+pre{background:var(--card);border:1px solid var(--border);padding:12px 14px;overflow-x:auto;border-radius:6px;font-size:.85rem;line-height:1.5}
+code{font-family:'Cascadia Mono',Consolas,'Courier New',monospace}
+.kicker{font:600 12px/1.4 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.meta{font:14px/1.5 system-ui,sans-serif;color:var(--muted)}
+nav.series{display:flex;justify-content:space-between;gap:16px;font:15px/1.4 system-ui,sans-serif;margin:28px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+nav.series a{text-decoration:none}nav.series a:hover{text-decoration:underline}
+footer{margin-top:48px;font:14px/1.6 system-ui,sans-serif;color:var(--muted)}
+ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
+.kicker a.lang{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--border)}
+</style><link rel="alternate" hreflang="en" href="https://dedezza1d.github.io/inside-a-chatgpt/part-0-the-math.html"></head><body><main><div class="kicker">Como um ChatGPT funciona por dentro · uma série em três partes · <a class="lang" href="../inside-a-chatgpt/part-0-the-math.html" hreflang="en">Read in English</a></div><nav class="series"><a href="index.html">← Índice da série</a><a href="parte-1-por-dentro.html">Parte 1 — Como um ChatGPT funciona por dentro →</a></nav><h1>Parte 0 — A matemática da IA sem medo</h1>
+<p><em>Série "Como um ChatGPT funciona por dentro" · Parte 0 de 3</em></p>
+<p>Para entender como um modelo de linguagem funciona, não é preciso dominar cálculo nem álgebra avançada. O funcionamento se apoia em cinco operações, e todas se resumem a somar e multiplicar.</p>
+<p>Neste post, as cinco aparecem num caso medido. O pocketchat é um modelo de linguagem pequeno, construído do zero e treinado num notebook, com textos em inglês. A Parte 1 mostra como ele foi feito. Quando recebe o começo de frase</p>
+<pre><code>Water is made of hydrogen and
+</code></pre>
+<p>("A água é feita de hidrogênio e"), ele calcula uma porcentagem para cada palavra que pode vir em seguida:</p>
+<table>
+<thead>
+<tr>
+<th>Próxima palavra</th>
+<th>Porcentagem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen (oxigênio)</td>
+<td>52,9%</td>
+</tr>
+<tr>
+<td>hydrogen (hidrogênio)</td>
+<td>6,6%</td>
+</tr>
+<tr>
+<td>carbon (carbono)</td>
+<td>4,9%</td>
+</tr>
+<tr>
+<td>nitrogen (nitrogênio)</td>
+<td>3,5%</td>
+</tr>
+<tr>
+<td>table (mesa)</td>
+<td>0,0001%</td>
+</tr>
+</tbody>
+</table>
+<p>Todos os números das seções 1 a 4 foram medidos nesse modelo. Cada seção mostra uma das operações que levam a essas porcentagens.</p>
+<p>Neste post:</p>
+<ol>
+<li>Como uma palavra é representada por números</li>
+<li>Como se mede a semelhança entre duas palavras</li>
+<li>Como o modelo dá uma nota a cada próxima palavra possível</li>
+<li>Como as notas viram porcentagens</li>
+<li>Como o modelo corrige os próprios números</li>
+</ol>
+<p>Pré-requisitos: somar e multiplicar. Os trechos de código são opcionais e usam Python básico.</p>
+<h2>1. Palavras representadas por números</h2>
+<p>Um modelo de linguagem só faz contas, então cada palavra precisa ser representada por números. No pocketchat, cada palavra é uma lista de 512 números. Os quatro primeiros números de três dessas listas:</p>
+<table>
+<thead>
+<tr>
+<th>Palavra</th>
+<th>Posição 1</th>
+<th>Posição 2</th>
+<th>Posição 3</th>
+<th>Posição 4</th>
+<th>Restante</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>−0,012</td>
+<td>−0,022</td>
+<td>0,053</td>
+<td>0,054</td>
+<td>mais 508 números</td>
+</tr>
+<tr>
+<td>nitrogen</td>
+<td>−0,010</td>
+<td>0,007</td>
+<td>0,007</td>
+<td>−0,013</td>
+<td>mais 508 números</td>
+</tr>
+<tr>
+<td>table</td>
+<td>−0,066</td>
+<td>−0,052</td>
+<td>−0,005</td>
+<td>−0,063</td>
+<td>mais 508 números</td>
+</tr>
+</tbody>
+</table>
+<p>Todas as palavras usam as mesmas 512 posições, na mesma ordem. É isso que permite compará-las.</p>
+<p>Uma lista de números com posições fixas se chama <strong>vetor</strong>. Nos modelos de linguagem, o vetor de uma palavra se chama <strong>embedding</strong>.</p>
+<p>Sobre essas listas:</p>
+<ul>
+<li>ninguém definiu o que cada posição significa. Não existe uma posição "é um gás" nem uma posição "é um móvel";</li>
+<li>no começo do treino, os 512 números de cada palavra são sorteados;</li>
+<li>durante o treino, eles são ajustados pela regra da seção 5, com um único objetivo: prever a próxima palavra.</li>
+</ul>
+<p>Olhando só para os números de uma lista, não dá para dizer nada sobre a palavra. A informação aparece quando duas listas são comparadas, que é a próxima operação.</p>
+<h2>2. Semelhança entre duas palavras</h2>
+<p>Para medir a semelhança entre duas palavras, multiplica-se o número de cada posição de uma lista pelo número da mesma posição da outra, e somam-se os resultados.</p>
+<p>Com listas curtas, a conta inteira cabe numa linha:</p>
+<pre><code>[2; 0; 1] · [3; 4; 5] = (2 × 3) + (0 × 4) + (1 × 5) = 11
+</code></pre>
+<p>Com as listas do pocketchat, a conta é a mesma, com 512 multiplicações em vez de três. Para oxygen e nitrogen, ela começa assim:</p>
+<pre><code>(−0,012 × −0,010) + (−0,022 × 0,007) + (0,053 × 0,007) + (0,054 × −0,013)
++ ... mais 508 multiplicações
+</code></pre>
+<p>O computador faz as 512 multiplicações e soma. O resultado para quatro pares de palavras:</p>
+<table>
+<thead>
+<tr>
+<th>Par</th>
+<th>Semelhança</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen · hydrogen</td>
+<td>0,64</td>
+</tr>
+<tr>
+<td>oxygen · nitrogen</td>
+<td>0,62</td>
+</tr>
+<tr>
+<td>oxygen · carbon</td>
+<td>0,46</td>
+</tr>
+<tr>
+<td>oxygen · table</td>
+<td>0,20</td>
+</tr>
+</tbody>
+</table>
+<p>Quanto maior o resultado, mais parecidas as listas. Cada multiplicação dá um número positivo quando os dois números têm o mesmo sinal, e negativo quando os sinais são opostos. As listas de oxygen e nitrogen têm o mesmo sinal em 341 das 512 posições. As de oxygen e table, em 292.</p>
+<p>Ninguém informou ao modelo que oxigênio, hidrogênio e nitrogênio são elementos químicos. As listas dessas palavras ficaram parecidas durante o treino. A seção 5 mostra como.</p>
+<pre><code>def semelhanca(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+semelhanca([2, 0, 1], [3, 4, 5])   # 11
+</code></pre>
+<p>Essa operação se chama <strong>produto escalar</strong>. Ela é usada em todas as próximas seções e, na Parte 1, é a base do mecanismo de <strong>atenção</strong>.</p>
+<h2>3. A nota de cada próxima palavra</h2>
+<p>Ao chegar ao fim de "Water is made of hydrogen and", o modelo já calculou uma lista de 512 números para a frase inteira, nas mesmas posições das listas das palavras. A Parte 1 mostra como essa lista é calculada. Os quatro primeiros números dela:</p>
+<pre><code>lista da frase: [2,324; −1,347; 0,371; 2,043; ... mais 508 números]
+</code></pre>
+<p>A nota de cada palavra candidata é a semelhança entre a lista da frase e a lista da palavra, calculada como na seção 2. Para oxygen:</p>
+<pre><code>(2,324 × −0,012) + (−1,347 × −0,022) + (0,371 × 0,053) + (2,043 × 0,054)
++ ... mais 508 multiplicações
+= −0,028 + 0,030 + 0,020 + 0,110 + ...
+= 9,76
+</code></pre>
+<p>Para table:</p>
+<pre><code>(2,324 × −0,066) + (−1,347 × −0,052) + (0,371 × −0,005) + (2,043 × −0,063)
++ ... mais 508 multiplicações
+= −0,153 + 0,070 − 0,002 − 0,129 + ...
+= −3,29
+</code></pre>
+<p>As notas das cinco palavras da tabela do início:</p>
+<table>
+<thead>
+<tr>
+<th>Palavra</th>
+<th>Nota</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>9,76</td>
+</tr>
+<tr>
+<td>hydrogen</td>
+<td>7,68</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>7,39</td>
+</tr>
+<tr>
+<td>nitrogen</td>
+<td>7,04</td>
+</tr>
+<tr>
+<td>table</td>
+<td>−3,29</td>
+</tr>
+</tbody>
+</table>
+<p>A lista de oxygen tem o mesmo sinal da lista da frase em 308 das 512 posições, e por isso a maior parte das multiplicações dá um número positivo. A lista de table tem o mesmo sinal em 234 posições e o sinal oposto em 278, e a soma fica negativa. Uma nota negativa indica só que a palavra é uma continuação improvável.</p>
+<p>Repare na organização das contas: as listas das palavras ficam uma embaixo da outra, formando uma tabela, e cada linha é comparada com a mesma lista da frase. Uma tabela de números usada assim se chama <strong>matriz</strong>. A operação, que produz uma nova lista com um resultado por linha, é a <strong>multiplicação de matriz por vetor</strong>.</p>
+<p>No pocketchat, essa tabela tem 8.192 linhas, uma para cada palavra ou pedaço de palavra que o modelo conhece, e 512 colunas. São 4.194.304 números. O resultado da operação são 8.192 notas, uma para cada próxima palavra possível.</p>
+<p>Num modelo de linguagem, essa operação aparece em dois tipos de lugar:</p>
+<ul>
+<li>No último passo, para dar uma nota a cada próxima palavra, como nesta seção.</li>
+<li>Nos passos intermediários, outras tabelas transformam uma lista de números em outra lista. É com elas que o modelo calcula a lista da frase. Cada uma dessas tabelas é uma <strong>camada</strong> da rede neural.</li>
+</ul>
+<p>Todos os números das tabelas e das listas de palavras são os <strong>parâmetros</strong> (ou <strong>pesos</strong>) do modelo. O pocketchat tem 29,9 milhões. "Um modelo de 7 bilhões de parâmetros" é um modelo em que a contagem desses números dá 7 bilhões. Todos começam sorteados e são ajustados no treino.</p>
+<h2>4. De notas para porcentagens</h2>
+<p>As notas indicam a ordem de preferência entre as palavras, mas não são porcentagens. A conversão tem dois passos:</p>
+<ol>
+<li>Aplicar a exponencial a cada nota: calcular e elevado à nota, sendo e ≈ 2,718. O resultado é sempre positivo, e cada ponto a mais na nota multiplica o resultado por 2,718.</li>
+<li>Dividir cada resultado pela soma dos resultados das 8.192 palavras. Assim, o total dá 100%.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Palavra</th>
+<th>Nota</th>
+<th>Passo 1: e^nota</th>
+<th>Passo 2: porcentagem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>9,76</td>
+<td>17.405</td>
+<td>52,9%</td>
+</tr>
+<tr>
+<td>hydrogen</td>
+<td>7,68</td>
+<td>2.166</td>
+<td>6,6%</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>7,39</td>
+<td>1.624</td>
+<td>4,9%</td>
+</tr>
+<tr>
+<td>nitrogen</td>
+<td>7,04</td>
+<td>1.145</td>
+<td>3,5%</td>
+</tr>
+<tr>
+<td>table</td>
+<td>−3,29</td>
+<td>0,04</td>
+<td>0,0001%</td>
+</tr>
+<tr>
+<td>as outras 8.187</td>
+<td></td>
+<td>10.569</td>
+<td>32,1%</td>
+</tr>
+<tr>
+<td>Soma</td>
+<td></td>
+<td>32.909</td>
+<td>100%</td>
+</tr>
+</tbody>
+</table>
+<p>Exemplo da conta do passo 2, para oxygen: 17.405 ÷ 32.909 = 0,529, ou 52,9%. As notas aparecem na tabela com duas casas decimais; o passo 1 foi calculado com todas as casas.</p>
+<pre><code>import math
+
+def softmax(notas):
+    exps = [math.exp(n) for n in notas]
+    total = sum(exps)
+    return [e / total for e in exps]
+
+softmax([2.0, 1.0, 0.0])   # [0.665, 0.245, 0.090]
+</code></pre>
+<p>Por causa do passo 1, diferenças nas notas viram diferenças grandes nas porcentagens: a nota de oxygen é 2,08 pontos maior que a de hydrogen, e a porcentagem é 8 vezes maior. Mesmo assim, nenhuma palavra fica com 0%. Table tem 0,0001%.</p>
+<p>Essa conversão se chama <strong>softmax</strong>. Depois dela, o modelo sorteia a próxima palavra de acordo com as porcentagens. Em 100 sorteios, oxygen sai cerca de 53 vezes, hydrogen 7 e carbon 5. Quando sai carbon, o modelo escreve "Water is made of hydrogen and carbon", uma frase errada. A Parte 1 volta a esse ponto.</p>
+<h2>5. Como o modelo corrige os próprios números</h2>
+<p>As listas das seções anteriores são o resultado do treino. No começo, todas tinham números sorteados. Esta seção mostra a regra que corrige esses números a cada frase de treino.</p>
+<p>Não dá para acompanhar à mão a correção de listas de 512 números. Só nesta seção, as contas usam uma versão reduzida: listas de dois números e três palavras. A regra é a mesma que treinou o pocketchat, e os valores iniciais foram sorteados, como num modelo real:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Lista inicial</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>frase "hydrogen and"</td>
+<td>[0,5; 0,5]</td>
+</tr>
+<tr>
+<td>oxygen</td>
+<td>[0,2; −0,1]</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>[−0,3; 0,2]</td>
+</tr>
+<tr>
+<td>table</td>
+<td>[0,1; 0,3]</td>
+</tr>
+</tbody>
+</table>
+<h3>Antes do treino</h3>
+<p>Notas (semelhança com a frase) e porcentagens (softmax):</p>
+<table>
+<thead>
+<tr>
+<th>Palavra</th>
+<th>Nota</th>
+<th>Porcentagem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>(0,5 × 0,2) + (0,5 × −0,1) = 0,05</td>
+<td>32,6%</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>(0,5 × −0,3) + (0,5 × 0,2) = −0,05</td>
+<td>29,5%</td>
+</tr>
+<tr>
+<td>table</td>
+<td>(0,5 × 0,1) + (0,5 × 0,3) = 0,20</td>
+<td>37,9%</td>
+</tr>
+</tbody>
+</table>
+<p>Com números sorteados, a palavra mais provável depois de "hydrogen and" é table.</p>
+<h3>A regra de correção</h3>
+<p>Nos textos de treino do pocketchat, "hydrogen and" aparece 1.021 vezes. A palavra seguinte é oxygen em 323 delas, carbon em 68 e table em nenhuma. Cada ocorrência gera uma correção.</p>
+<p>Suponha que a primeira frase de treino termine em "hydrogen and oxygen". A resposta certa é oxygen. A correção é feita assim:</p>
+<ul>
+<li>Palavra certa: soma-se à lista dela a lista da frase multiplicada por (1 − a porcentagem que ela recebeu). Oxygen recebeu 32,6%, então o multiplicador é 1 − 0,326 = 0,674.</li>
+<li>Cada palavra errada: subtrai-se da lista dela a lista da frase multiplicada pela porcentagem que ela recebeu. Carbon recebeu 29,5% (multiplicador 0,295); table recebeu 37,9% (multiplicador 0,379).</li>
+</ul>
+<p>Essa regra não foi escolhida à mão. Ela é o resultado do cálculo do <strong>gradiente</strong> da <strong>perda</strong> (o número que mede o erro do modelo), e bibliotecas como o PyTorch a calculam automaticamente.</p>
+<h3>Correção 1: a resposta certa é oxygen</h3>
+<table>
+<thead>
+<tr>
+<th>Palavra</th>
+<th>Conta</th>
+<th>Nova lista</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>[0,2; −0,1] + 0,674 × [0,5; 0,5] = [0,2 + 0,337; −0,1 + 0,337]</td>
+<td>[0,537; 0,237]</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>[−0,3; 0,2] − 0,295 × [0,5; 0,5] = [−0,3 − 0,148; 0,2 − 0,148]</td>
+<td>[−0,448; 0,052]</td>
+</tr>
+<tr>
+<td>table</td>
+<td>[0,1; 0,3] − 0,379 × [0,5; 0,5] = [0,1 − 0,189; 0,3 − 0,189]</td>
+<td>[−0,089; 0,111]</td>
+</tr>
+</tbody>
+</table>
+<p>Novas notas e porcentagens:</p>
+<table>
+<thead>
+<tr>
+<th>Palavra</th>
+<th>Nota</th>
+<th>Porcentagem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>0,387</td>
+<td>44,6%</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>−0,198</td>
+<td>24,8%</td>
+</tr>
+<tr>
+<td>table</td>
+<td>0,011</td>
+<td>30,6%</td>
+</tr>
+</tbody>
+</table>
+<p>A nota de oxygen subiu de 0,05 para 0,387, e oxygen passou a ser a palavra mais provável.</p>
+<h3>Por que somar a lista da frase faz a nota subir</h3>
+<p>A nota é a soma de "número da frase × número da palavra", posição por posição. Ao somar à palavra uma fração da lista da frase:</p>
+<ul>
+<li>nas posições em que a frase tem um número positivo, o número da palavra aumenta, e o produto daquela posição aumenta;</li>
+<li>nas posições em que a frase tem um número negativo, o número da palavra diminui, e o produto (negativo × negativo) também aumenta.</li>
+</ul>
+<p>A nota sobe em todas as posições. No exemplo, a nota de oxygen subiu 0,674 × (0,5 × 0,5 + 0,5 × 0,5) = 0,674 × 0,5 = 0,337: de 0,05 para 0,387. Pelo mesmo raciocínio, subtrair a lista da frase faz a nota das palavras erradas cair.</p>
+<p>O tamanho da correção depende do erro. Se oxygen tivesse recebido 95%, o multiplicador seria 1 − 0,95 = 0,05, e a lista de oxygen quase não mudaria. Quanto mais o modelo erra, maior a correção.</p>
+<h3>Correção 2: a resposta certa é carbon</h3>
+<p>Agora a frase de treino termina em "hydrogen and carbon". Os multiplicadores saem das porcentagens da tabela anterior:</p>
+<table>
+<thead>
+<tr>
+<th>Palavra</th>
+<th>Conta</th>
+<th>Nova lista</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>carbon</td>
+<td>[−0,448; 0,052] + (1 − 0,248) × [0,5; 0,5]</td>
+<td>[−0,072; 0,428]</td>
+</tr>
+<tr>
+<td>oxygen</td>
+<td>[0,537; 0,237] − 0,446 × [0,5; 0,5]</td>
+<td>[0,314; 0,014]</td>
+</tr>
+<tr>
+<td>table</td>
+<td>[−0,089; 0,111] − 0,306 × [0,5; 0,5]</td>
+<td>[−0,242; −0,042]</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Palavra</th>
+<th>Nota</th>
+<th>Porcentagem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oxygen</td>
+<td>0,164</td>
+<td>36,4%</td>
+</tr>
+<tr>
+<td>carbon</td>
+<td>0,178</td>
+<td>36,9%</td>
+</tr>
+<tr>
+<td>table</td>
+<td>−0,142</td>
+<td>26,8%</td>
+</tr>
+</tbody>
+</table>
+<h3>O resultado</h3>
+<p>Em duas correções:</p>
+<ul>
+<li>table teve a lista diminuída nas duas vezes e passou de 37,9% para 26,8%. Nada no processo informa que mesa não é um elemento químico: ela perdeu chance porque não era a resposta em nenhuma das duas frases;</li>
+<li>oxygen e carbon receberam, cada uma, uma soma da mesma lista da frase, e terminaram quase empatadas, com cerca de 36% cada.</li>
+</ul>
+<p>No treino do pocketchat, esse processo se repetiu centenas de milhões de vezes, com quatro diferenças em relação à versão reduzida:</p>
+<ol>
+<li>Os multiplicadores são multiplicados também por um número pequeno, chamado <strong>taxa de aprendizado</strong> (por exemplo, 0,001). Cada correção é bem menor do que no exemplo.</li>
+<li>A lista da frase também é corrigida, pela mesma regra: soma-se a ela uma fração da lista da palavra certa e subtrai-se uma fração das listas das palavras erradas. Na próxima frase parecida, ela produz notas melhores.</li>
+<li>Todos os parâmetros do modelo são corrigidos, não só as listas das palavras. O PyTorch calcula a correção de cada um.</li>
+<li>As respostas certas não aparecem em quantidades iguais. Depois de "hydrogen and", oxygen foi a resposta 323 vezes, e carbon, 68. Oxygen recebeu mais somas, e no modelo treinado tem a nota maior.</li>
+</ol>
+<p>O procedimento completo, em que cada parâmetro é corrigido na direção que reduz o erro, se chama <strong>descida de gradiente</strong>.</p>
+<p>É assim que as listas da seção 1 chegaram aos valores que têm. Oxygen, hydrogen e nitrogen aparecem depois dos mesmos tipos de começo de frase. A cada um deles, as listas das três recebem somas de listas de frase parecidas, e por isso ficam parecidas entre si: a semelhança entre oxygen e nitrogen é 0,62. Table aparece depois de outros começos de frase e recebe somas de outras listas: a semelhança entre oxygen e table é 0,20.</p>
+<h2>Resumo</h2>
+<p>Para completar "Water is made of hydrogen and", o pocketchat:</p>
+<ol>
+<li>representa cada palavra com uma lista de 512 números (vetor, ou embedding);</li>
+<li>mede semelhanças multiplicando posição por posição e somando (produto escalar);</li>
+<li>compara a lista da frase com a lista de cada uma das 8.192 palavras, numa tabela (matriz), e obtém uma nota por palavra: 9,76 para oxygen, −3,29 para table;</li>
+<li>converte as notas em porcentagens (softmax) e sorteia a próxima palavra: 52,9% para oxygen;</li>
+<li>no treino, somou à lista da palavra certa e subtraiu das erradas frações da lista da frase, proporcionais ao erro (descida de gradiente).</li>
+</ol>
+<h2>Para fixar</h2>
+<ol>
+<li>Calcule a semelhança entre as listas [1; 2; 3] e [4; 0; 2].</li>
+<li>Na tabela da seção 4, o resultado do passo 1 para nitrogen é 1.145, e a soma é 32.909. Faça a conta do passo 2.</li>
+<li>Se as 8.192 palavras recebessem a mesma nota, qual seria a porcentagem de cada uma?</li>
+<li>Na seção 5, se o modelo tivesse dado 90% de chance a oxygen antes da correção 1, por qual número a lista da frase seria multiplicada antes de ser somada à lista de oxygen?</li>
+<li>Por que oxygen e carbon terminaram a seção 5 com porcentagens parecidas?</li>
+</ol>
+<p>Respostas:</p>
+<ol>
+<li>(1 × 4) + (2 × 0) + (3 × 2) = 10.</li>
+<li>1.145 ÷ 32.909 = 0,035, ou 3,5%.</li>
+<li>100% ÷ 8.192 = 0,012% cada. Notas iguais geram o mesmo resultado no passo 1, e a divisão pela soma dá partes iguais.</li>
+<li>1 − 0,90 = 0,10. A correção seria pequena, porque o modelo já estava quase acertando.</li>
+<li>Porque, nas duas correções, as listas de oxygen e de carbon receberam somas da mesma lista da frase, uma vez cada. Cada uma teve uma soma (quando era a resposta certa) e uma subtração (quando não era), e as duas terminaram com notas próximas.</li>
+</ol>
+<p>Próximo post: na Parte 1 — Como um ChatGPT funciona por dentro, seguimos a mesma frase dentro do pocketchat: como o texto é dividido em tokens, como o modelo calcula a lista da frase usando atenção e como o treino acontece na prática. <a href="https://dedezza1d.github.io/como-um-chatgpt-funciona/parte-1-por-dentro.html">Ler Parte 1 — Como um ChatGPT funciona por dentro</a></p><nav class="series"><a href="index.html">← Índice da série</a><a href="parte-1-por-dentro.html">Parte 1 — Como um ChatGPT funciona por dentro →</a></nav><footer>Escrito por Andrezza Medeiros Souza. Todos os números desta série foram medidos no <a href="https://github.com/dedezza1D/pocketchat">pocketchat</a>, um GPT pequeno treinado do zero num notebook. Código: <a href="https://github.com/dedezza1D/pocketchat">github.com/dedezza1D/pocketchat</a>.</footer></main></body></html>

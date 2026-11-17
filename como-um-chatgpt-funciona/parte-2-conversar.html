@@ -1,0 +1,338 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parte 2 — Ensinando o modelo a conversar · Como um ChatGPT funciona por dentro</title>
+<meta name="description" content="Ajuste fino para conversa num GPT pequeno: tokens especiais, máscara na perda, o que ele ensina e o esquecimento que ele causa.">
+<meta name="author" content="Andrezza Medeiros Souza">
+<link rel="canonical" href="https://dedezza1d.github.io/como-um-chatgpt-funciona/parte-2-conversar.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Parte 2 — Ensinando o modelo a conversar · Como um ChatGPT funciona por dentro">
+<meta property="og:description" content="Ajuste fino para conversa num GPT pequeno: tokens especiais, máscara na perda, o que ele ensina e o esquecimento que ele causa.">
+<meta property="og:url" content="https://dedezza1d.github.io/como-um-chatgpt-funciona/parte-2-conversar.html">
+<meta property="og:image" content="https://dedezza1d.github.io/como-um-chatgpt-funciona/cover-parte-2-conversar.png">
+<meta name="twitter:card" content="summary_large_image"><style>
+:root{--bg:#fbfaf8;--fg:#1d1a1b;--muted:#6b6264;--accent:#a3253b;--card:#f3eeec;--border:#e4dcda}
+@media (prefers-color-scheme:dark){:root{--bg:#121011;--fg:#efe8e2;--muted:#a89da0;--accent:#e2697d;--card:#1d1719;--border:#352c2f}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 Georgia,'Times New Roman',serif}
+main{max-width:740px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:2.1rem;line-height:1.2;margin:.2em 0 .4em}
+h2{margin-top:2.2em;font-size:1.45rem;border-bottom:1px solid var(--border);padding-bottom:.2em}
+h3{margin-top:1.6em;font-size:1.12rem;color:var(--accent)}
+a{color:var(--accent)}p,li{overflow-wrap:break-word}
+table{border-collapse:collapse;margin:1em 0;font-size:.9rem;display:block;overflow-x:auto;max-width:100%}
+th,td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}th{background:var(--card)}
+pre{background:var(--card);border:1px solid var(--border);padding:12px 14px;overflow-x:auto;border-radius:6px;font-size:.85rem;line-height:1.5}
+code{font-family:'Cascadia Mono',Consolas,'Courier New',monospace}
+.kicker{font:600 12px/1.4 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.meta{font:14px/1.5 system-ui,sans-serif;color:var(--muted)}
+nav.series{display:flex;justify-content:space-between;gap:16px;font:15px/1.4 system-ui,sans-serif;margin:28px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+nav.series a{text-decoration:none}nav.series a:hover{text-decoration:underline}
+footer{margin-top:48px;font:14px/1.6 system-ui,sans-serif;color:var(--muted)}
+ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
+.kicker a.lang{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--border)}
+</style><link rel="alternate" hreflang="en" href="https://dedezza1d.github.io/inside-a-chatgpt/part-2-teaching-it-to-chat.html"></head><body><main><div class="kicker">Como um ChatGPT funciona por dentro · uma série em três partes · <a class="lang" href="../inside-a-chatgpt/part-2-teaching-it-to-chat.html" hreflang="en">Read in English</a></div><nav class="series"><a href="parte-1-por-dentro.html">← Parte 1 — Como um ChatGPT funciona por dentro</a><a href="index.html">Índice da série →</a></nav><h1>Parte 2 — Ensinando o modelo a conversar</h1>
+<p><em>Série "Como um ChatGPT funciona por dentro" · Parte 2 de 3</em></p>
+<p>Na Parte 1, o pocketchat aprendeu a calcular a próxima palavra de qualquer texto. Ele completa "Water is made of hydrogen and" com oxygen em 52,9% dos sorteios. Mas, diante da pergunta "What is water made of?", ele não responde: continua o texto da forma mais provável. Este post mostra a etapa que transforma um modelo como esse num assistente que responde perguntas.</p>
+<p>Neste post:</p>
+<ol>
+<li>Por que o modelo pré-treinado não responde perguntas</li>
+<li>Como uma conversa vira uma sequência de tokens</li>
+<li>Os exemplos de treino</li>
+<li>O que muda no treino</li>
+<li>Como funciona a conversa com o modelo treinado</li>
+<li>O que esta etapa ensina e o que não ensina</li>
+<li>Os resultados no pocketchat</li>
+</ol>
+<p>Pré-requisitos: as Partes 0 e 1.</p>
+<h2>1. Por que o modelo pré-treinado não responde perguntas</h2>
+<p>O treino da Parte 1 se chama <strong>pré-treino</strong>. Nele, o modelo aprende a calcular a próxima palavra em textos de todo tipo. Uma pergunta, nesses textos, pode ser seguida de muitas coisas:</p>
+<ul>
+<li>de outra pergunta, numa lista de exercícios;</li>
+<li>de "Neste capítulo, vamos ver...", num livro;</li>
+<li>de uma resposta, num site de perguntas e respostas.</li>
+</ul>
+<p>O modelo pré-treinado calcula porcentagens que refletem todas essas possibilidades. Três continuações que o pocketchat escreveu para "What is water made of?", em três sorteios:</p>
+<ul>
+<li>"This is the same as what is a good thing about a building. Water is not an easy one for water to flow through."</li>
+<li>"These are the steps you will take to make the water more water efficient."</li>
+<li>"Water is formed by a mixture of two different types of water that is formulated in water."</li>
+</ul>
+<p>Só a terceira tem o formato de uma resposta, e o conteúdo dela está errado. Para que o modelo responda sempre, é preciso uma segunda etapa de treino, com exemplos em que a continuação é sempre uma resposta.</p>
+<h2>2. Uma conversa como sequência de tokens</h2>
+<p>O modelo só trabalha com sequências de tokens. Uma conversa precisa ser escrita como uma sequência, com marcas que indicam quem fala. Para isso, o tokenizer do pocketchat reservou tokens especiais:</p>
+<ul>
+<li>&lt;|user|&gt;: começo da fala da pessoa;</li>
+<li>&lt;|assistant|&gt;: começo da fala do assistente;</li>
+<li>&lt;|end|&gt;: fim de uma fala.</li>
+</ul>
+<p>Uma conversa vira uma sequência assim:</p>
+<pre><code>&lt;|user|&gt;What is water made of?&lt;|end|&gt;&lt;|assistant|&gt;Water is made of hydrogen and oxygen.&lt;|end|&gt;
+</code></pre>
+<p>Cada token especial tem a sua própria lista de números, como qualquer outro token. No pré-treino, &lt;|user|&gt;, &lt;|assistant|&gt; e &lt;|end|&gt; nunca apareceram no texto. Mesmo assim, as listas deles mudaram: no pocketchat, a mesma lista de cada token é usada para dar a nota dele como próxima palavra (Parte 0, seção 3), e em todas as rodadas esses três tokens foram respostas erradas. A regra de correção da Parte 0 (seção 5) subtraiu deles, 15 mil vezes, frações das listas das frases.</p>
+<p>O resultado, medido no modelo ao fim do pré-treino:</p>
+<ul>
+<li>as três listas ficaram praticamente iguais entre si (semelhança de 0,996 numa escala em que 1 é idêntico);</li>
+<li>o modelo dá a cada um deles uma chance de cerca de 0,00000006% como próxima palavra. Table, a palavra improvável da Parte 0, tinha 0,0001%.</li>
+</ul>
+<p>Ou seja, o modelo começa esta etapa sem conseguir distinguir os três tokens e com notas muito baixas para eles. Antes do ajuste, uma opção é recomeçar as listas desses três tokens a partir da média das listas dos outros tokens, com pequenas diferenças entre si.</p>
+<p>No pocketchat, testamos as duas opções com o mesmo treino da seção 4:</p>
+<table>
+<thead>
+<tr>
+<th>Listas dos tokens de conversa</th>
+<th>Perda nas falas do assistente, antes do ajuste</th>
+<th>Depois do ajuste</th>
+<th>Respostas que terminam (seção 7)</th>
+<th>Trigramas repetidos (seção 7)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>mantidas</td>
+<td>3,10</td>
+<td>2,579</td>
+<td>77%</td>
+<td>9,3%</td>
+</tr>
+<tr>
+<td>recomeçadas</td>
+<td>2,96</td>
+<td>2,574</td>
+<td>80%</td>
+<td>6,7%</td>
+</tr>
+</tbody>
+</table>
+<p>Só recomeçar as listas, antes de qualquer correção, já baixou a perda de 3,10 para 2,96. Depois do ajuste, as duas versões ficam próximas, com uma pequena vantagem para as listas recomeçadas, que é a versão usada no resto deste post. Com uma diferença desse tamanho, outra rodada de treino com outro sorteio poderia inverter a ordem.</p>
+<p>O tokenizer também impede que esses tokens sejam criados a partir do texto digitado por alguém. Se uma pessoa escrever "&lt;|assistant|&gt;" numa mensagem, esse texto é dividido em tokens comuns (&lt;, |, assistant...), e não vira o token especial. Sem essa proteção, uma mensagem poderia simular a fala do assistente e alterar o comportamento do modelo.</p>
+<h2>3. Os exemplos de treino</h2>
+<p>Nesta etapa, os exemplos são conversas como a da seção 2. As características que importam:</p>
+<ul>
+<li>Quantidade: muito menor que no pré-treino. Alguns milhares a dezenas de milhares de conversas são suficientes para mudar o formato das respostas de um modelo pequeno, contra centenas de milhões de tokens no pré-treino.</li>
+<li>Variedade: perguntas de vários tipos (definições, explicações, instruções, pedidos de lista), para o modelo responder no formato certo em situações diferentes.</li>
+<li>Origem: conjuntos públicos de conversas com licença que permita o uso, ou conversas escritas a partir de modelos de frase (templates). Respostas geradas por serviços como ChatGPT ou Claude não devem ser usadas, porque os termos de uso desses serviços proíbem treinar outros modelos com elas.</li>
+</ul>
+<p>O pocketchat usou dois conjuntos públicos, ambos em inglês e escritos por pessoas:</p>
+<table>
+<thead>
+<tr>
+<th>Conjunto</th>
+<th>Licença</th>
+<th>Conversas usadas</th>
+<th>Formato</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAssistant oasst1</td>
+<td>Apache-2.0</td>
+<td>3.647</td>
+<td>conversas com várias trocas; em cada troca, usamos a resposta que os voluntários classificaram como melhor</td>
+</tr>
+<tr>
+<td>databricks-dolly-15k</td>
+<td>CC BY-SA 3.0</td>
+<td>14.302</td>
+<td>uma pergunta ou instrução e uma resposta; os autores foram orientados a não usar IA para escrever</td>
+</tr>
+</tbody>
+</table>
+<p>No total, são 17.949 conversas: 17.411 para o treino e 538 separadas para medir o erro. Elas somam 3,65 milhões de tokens, dos quais 2,34 milhões são falas do assistente, as únicas que geram correção. É menos de 1% do texto usado no pré-treino (482 milhões de tokens). Conversas com mais de 512 tokens foram cortadas no limite que o modelo processa de uma vez.</p>
+<h2>4. O que muda no treino</h2>
+<p>A regra de correção é a mesma da Parte 0, seção 5, com três diferenças.</p>
+<h3>4.1 O modelo começa dos números do pré-treino</h3>
+<p>Os parâmetros não começam sorteados: começam com os valores ao fim do pré-treino. Por isso esta etapa se chama <strong>ajuste fino</strong> (fine-tuning), e mais especificamente <strong>ajuste fino supervisionado</strong> (SFT, de supervised fine-tuning). O modelo já sabe gramática e associações entre palavras; o ajuste muda o formato do que ele escreve.</p>
+<h3>4.2 Só as falas do assistente contam para a correção</h3>
+<p>No pré-treino, toda posição do texto é um exemplo de previsão. Aqui, só as posições da fala do assistente geram correção:</p>
+<table>
+<thead>
+<tr>
+<th>O modelo recebe</th>
+<th>Resposta certa</th>
+<th>Gera correção?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>...&lt;|user|&gt;</td>
+<td>What</td>
+<td>não</td>
+</tr>
+<tr>
+<td>...What is water made</td>
+<td>of</td>
+<td>não</td>
+</tr>
+<tr>
+<td>...made of?&lt;|end|&gt;</td>
+<td>&lt;|assistant|&gt;</td>
+<td>não</td>
+</tr>
+<tr>
+<td>...&lt;|assistant|&gt;</td>
+<td>Water</td>
+<td>sim</td>
+</tr>
+<tr>
+<td>...Water is made of hydrogen and</td>
+<td>oxygen</td>
+<td>sim</td>
+</tr>
+<tr>
+<td>...and oxygen.</td>
+<td>&lt;|end|&gt;</td>
+<td>sim</td>
+</tr>
+</tbody>
+</table>
+<p>As falas da pessoa entram no cálculo (a atenção usa esses tokens para calcular a lista da frase), mas o modelo não é corrigido para prevê-las. Se fosse, ele também aprenderia a escrever perguntas, e não só respostas.</p>
+<p>Na prática, as posições que não geram correção recebem uma marca especial no lugar da resposta certa, e o cálculo da perda ignora essas posições.</p>
+<p>A última linha da tabela é importante: o modelo é corrigido para prever &lt;|end|&gt; no fim de cada resposta. É assim que ele aprende a terminar a fala.</p>
+<h3>4.3 Correções menores e menos rodadas</h3>
+<p>A taxa de aprendizado é menor que no pré-treino, e o número de rodadas também. Correções grandes, ou muitas rodadas sobre poucos exemplos, alteram demais os números do pré-treino, e o modelo perde parte do que tinha aprendido sobre a linguagem.</p>
+<p>No pocketchat:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Pré-treino (Parte 1)</th>
+<th>Ajuste fino</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Taxa de aprendizado no pico</td>
+<td>0,001</td>
+<td>0,0001</td>
+</tr>
+<tr>
+<td>Rodadas</td>
+<td>15.000</td>
+<td>1.632</td>
+</tr>
+<tr>
+<td>Exemplos por rodada</td>
+<td>64 trechos de 512 tokens</td>
+<td>32 conversas</td>
+</tr>
+<tr>
+<td>Tempo</td>
+<td>cerca de 4 horas</td>
+<td>cerca de 20 minutos</td>
+</tr>
+</tbody>
+</table>
+<p>As 1.632 rodadas passam três vezes por cada conversa de treino. A perda nas conversas separadas para teste caiu até a rodada 1.000 (2,574) e depois subiu um pouco (2,580 no fim). É o primeiro sinal de que o modelo começa a decorar as conversas de treino, em vez de aprender o formato geral. Por isso, o modelo guardado é o da rodada 1.000.</p>
+<h2>5. A conversa com o modelo treinado</h2>
+<p>Para conversar, um programa monta a sequência e chama o modelo a cada mensagem:</p>
+<ol>
+<li>A mensagem da pessoa é escrita no formato da seção 2: &lt;|user|&gt;mensagem&lt;|end|&gt;&lt;|assistant|&gt;.</li>
+<li>O modelo gera tokens, um a um, como na Parte 1, seção 6.</li>
+<li>Quando o modelo gera &lt;|end|&gt;, a geração para, e o texto gerado é mostrado como resposta.</li>
+<li>Na mensagem seguinte, a sequência inteira (perguntas e respostas anteriores) é enviada de novo, com a nova mensagem no fim.</li>
+</ol>
+<p>O passo 4 é a forma como o modelo "lembra" da conversa: ele não guarda nada entre uma mensagem e outra; o programa reenvia o histórico a cada vez. Como o pocketchat só processa 512 tokens de uma vez, conversas mais longas precisam ter as mensagens mais antigas removidas.</p>
+<h2>6. O que esta etapa ensina e o que não ensina</h2>
+<p>O ajuste fino ensina <strong>formato</strong> e <strong>comportamento</strong>: responder em vez de continuar o texto, terminar a resposta, seguir o estilo dos exemplos.</p>
+<p>Ele não acrescenta conhecimento. As informações que o modelo usa nas respostas vêm do pré-treino, e o ajuste fino pode até reduzir parte delas. Medimos isso no pocketchat, com os mesmos começos de frase da Parte 1:</p>
+<table>
+<thead>
+<tr>
+<th>Começo da frase</th>
+<th>Chance de oxygen antes do ajuste</th>
+<th>Depois do ajuste</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Water is made of hydrogen and</td>
+<td>52,9%</td>
+<td>28,8%</td>
+</tr>
+<tr>
+<td>Stars are made of hydrogen and</td>
+<td>38,4%</td>
+<td>15,8%</td>
+</tr>
+</tbody>
+</table>
+<p>O ajuste fino corrige os mesmos parâmetros que guardam as associações do pré-treino, e as conversas de treino quase não falam de química. Corrigidos em direção ao formato das conversas, esses parâmetros perderam parte do que o modelo tinha aprendido sobre a composição da água. Esse efeito se chama <strong>esquecimento</strong>, e é um dos motivos para a taxa de aprendizado menor e o número pequeno de rodadas da seção 4.3.</p>
+<p>Respostas erradas escritas com o mesmo formato e a mesma segurança das certas são as <strong>alucinações</strong> da Parte 1. A seção 7 mostra várias.</p>
+<p>Os assistentes comerciais passam ainda por uma terceira etapa, o <strong>ajuste por preferências</strong>. Pessoas comparam pares de respostas e indicam a melhor, e o modelo é corrigido para produzir respostas parecidas com as preferidas. Métodos usados nessa etapa incluem o RLHF (aprendizado por reforço com feedback humano) e o DPO (otimização direta de preferências). É nessa etapa que os assistentes aprendem, por exemplo, a recusar pedidos perigosos e a admitir quando não sabem algo.</p>
+<h2>7. Resultados</h2>
+<h3>7.1 O formato: as respostas passam a terminar</h3>
+<p>Para medir a mudança de comportamento, fizemos as mesmas 30 perguntas ao modelo antes e depois do ajuste, com as mesmas configurações de sorteio nos dois (temperatura 0,7 e uma penalidade leve para tokens que já apareceram na resposta) e um limite de 200 tokens por resposta. Três medidas:</p>
+<ul>
+<li>respostas que terminam: quantas fecham com &lt;|end|&gt; antes do limite;</li>
+<li>tamanho médio: em tokens;</li>
+<li>trigramas repetidos: a parte dos trechos de três tokens seguidos que já tinham aparecido na mesma resposta. Mede o quanto o texto anda em círculos.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Modelo</th>
+<th>Respostas que terminam</th>
+<th>Tamanho médio</th>
+<th>Trigramas repetidos</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>só pré-treino</td>
+<td>0%</td>
+<td>200 tokens (todas param no limite)</td>
+<td>66%</td>
+</tr>
+<tr>
+<td>depois do ajuste fino</td>
+<td>80%</td>
+<td>99 tokens</td>
+<td>6,7%</td>
+</tr>
+</tbody>
+</table>
+<p>A mudança no &lt;|end|&gt; também aparece numa medida direta. Depois de "&lt;|user|&gt;What is water made of?&lt;|end|&gt;&lt;|assistant|&gt;Water is made of hydrogen and oxygen.", a chance do próximo token ser &lt;|end|&gt; era de 0,04% no modelo pré-treinado e passou a 21,9% depois do ajuste.</p>
+<p>A perda nas falas do assistente, nas conversas separadas para teste, caiu de 3,10 (modelo pré-treinado) para 2,574.</p>
+<h3>7.2 O conteúdo: o formato certo não garante resposta certa</h3>
+<p>Respostas a "What is water made of?", em três sorteios.</p>
+<p>Antes do ajuste, o modelo não reconhece os tokens de conversa e escreve texto sem sentido, sem parar:
+".nichame.nichame.nichame.nichame.nichame.nichame..."</p>
+<p>Depois do ajuste, as três respostas terminam com &lt;|end|&gt; e têm a forma de uma explicação, mas nenhuma fala de água:</p>
+<ul>
+<li>"Pyrotoxin is a chemical substance that has been used in medicine for thousands of years."</li>
+<li>"Turkey is a sporting and cricket game where the players wear a spear or gloves of a leather knot."</li>
+<li>"Oregano is a very versatile and high quality product made from 9% sulfur."</li>
+</ul>
+<p>Outras respostas do modelo final, entre as 30 perguntas:</p>
+<ul>
+<li>"What is the capital of France?" → "Capital of France is the capital of France."</li>
+<li>"Why is the sky blue?" → "The sky blue is blue because of the color green."</li>
+<li>"What were the main causes of World War I?" → uma lista numerada, bem formatada, que atribui a guerra à invasão soviética do Afeganistão (que aconteceu em 1979).</li>
+<li>"Recommend a healthy breakfast." → "...it's important to eat plenty of vegetables and fruits, and avoid coffee, soda, tea and other caffeine-based..." A recomendação de frutas e verduras faz sentido; é uma das poucas respostas com conteúdo aceitável.</li>
+</ul>
+<p>O resultado resume o post: o ajuste fino ensinou o modelo a responder e a parar, mas o conteúdo depende do que o pré-treino deixou nos parâmetros, e num modelo de 30 milhões de parâmetros isso é pouco. Os assistentes comerciais têm milhares de vezes mais parâmetros e são pré-treinados com milhares de vezes mais texto, o que reduz esses erros sem eliminá-los.</p>
+<h2>Glossário</h2>
+<ul>
+<li>Pré-treino: primeira etapa de treino, com textos de todo tipo.</li>
+<li>Ajuste fino supervisionado (SFT): segunda etapa, com exemplos de conversas, partindo dos números do pré-treino.</li>
+<li>Token especial: token reservado para marcar a estrutura da conversa (&lt;|user|&gt;, &lt;|assistant|&gt;, &lt;|end|&gt;).</li>
+<li>Alucinação: resposta errada escrita com a mesma forma e segurança de uma resposta certa.</li>
+<li>Esquecimento: perda de parte do que o modelo aprendeu numa etapa quando os mesmos parâmetros são corrigidos em outra.</li>
+<li>Ajuste por preferências: etapa em que o modelo é corrigido a partir de comparações entre respostas (RLHF, DPO).</li>
+</ul>
+<h2>Para fixar</h2>
+<ol>
+<li>Por que um modelo pré-treinado pode responder uma pergunta com outra pergunta?</li>
+<li>Por que as falas da pessoa não geram correção no ajuste fino?</li>
+<li>Como o modelo sabe quando terminar uma resposta?</li>
+<li>O modelo guarda o histórico da conversa entre uma mensagem e outra?</li>
+<li>O ajuste fino ensina fatos novos ao modelo?</li>
+</ol>
+<p>Respostas:</p>
+<ol>
+<li>Porque nos textos do pré-treino uma pergunta pode ser seguida de outra pergunta, e o modelo calcula porcentagens que refletem todas as continuações que viu.</li>
+<li>Porque o objetivo é que o modelo aprenda a escrever respostas. Se fosse corrigido para prever as falas da pessoa, também aprenderia a escrever perguntas.</li>
+<li>Ele é corrigido para prever o token &lt;|end|&gt; no fim de cada resposta; quando esse token é gerado, o programa para a geração.</li>
+<li>Não. O programa reenvia toda a conversa a cada mensagem, até o limite de tokens que o modelo processa de uma vez.</li>
+<li>Não. Ele muda o formato das respostas; o conteúdo vem do pré-treino. No pocketchat, ele até reduziu a chance de oxygen depois de "Water is made of hydrogen and", de 52,9% para 28,8% (esquecimento).</li>
+</ol>
+<p>Código-fonte do pocketchat: <a href="https://github.com/dedezza1D/pocketchat">github.com/dedezza1D/pocketchat</a></p><nav class="series"><a href="parte-1-por-dentro.html">← Parte 1 — Como um ChatGPT funciona por dentro</a><a href="index.html">Índice da série →</a></nav><footer>Escrito por Andrezza Medeiros Souza. Todos os números desta série foram medidos no <a href="https://github.com/dedezza1D/pocketchat">pocketchat</a>, um GPT pequeno treinado do zero num notebook. Código: <a href="https://github.com/dedezza1D/pocketchat">github.com/dedezza1D/pocketchat</a>.</footer></main></body></html>

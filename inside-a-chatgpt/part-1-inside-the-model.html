@@ -28,7 +28,8 @@ nav.series{display:flex;justify-content:space-between;gap:16px;font:15px/1.4 sys
 nav.series a{text-decoration:none}nav.series a:hover{text-decoration:underline}
 footer{margin-top:48px;font:14px/1.6 system-ui,sans-serif;color:var(--muted)}
 ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
-</style></head><body><main><div class="kicker">Inside a ChatGPT · a series in three parts</div><nav class="series"><a href="part-0-the-math.html">← Part 0 — The math of AI, without fear</a><a href="part-2-teaching-it-to-chat.html">Part 2 — Teaching the model to chat →</a></nav><h1>Part 1 — Inside the model</h1>
+.kicker a.lang{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--border)}
+</style><link rel="alternate" hreflang="pt-BR" href="https://dedezza1d.github.io/como-um-chatgpt-funciona/parte-1-por-dentro.html"></head><body><main><div class="kicker">Inside a ChatGPT · a series in three parts · <a class="lang" href="../como-um-chatgpt-funciona/parte-1-por-dentro.html" hreflang="pt-BR">Leia em português</a></div><nav class="series"><a href="part-0-the-math.html">← Part 0 — The math of AI, without fear</a><a href="part-2-teaching-it-to-chat.html">Part 2 — Teaching the model to chat →</a></nav><h1>Part 1 — Inside the model</h1>
 <p><em>Series "Inside a ChatGPT" · Part 1 of 3</em></p>
 <p>In Part 0, we followed pocketchat as it completed "Water is made of hydrogen and" and saw the five operations it uses: representing words as lists of numbers, measuring similarity, giving a score to each next word, turning scores into percentages and correcting the numbers based on its errors. One question was left open: how does the model calculate the sentence list? This post answers it and shows the full model.</p>
 <p>pocketchat is a model built from scratch and trained on a laptop with an ordinary graphics card (RTX 4060, 8 GB). It has about 30 million parameters, thousands of times fewer than commercial models, and it uses the same architecture.</p>
