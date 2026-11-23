@@ -209,7 +209,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 </thead>
 <tbody>
 <tr>
-<td>hydrogen and</td>
+<td>… hydrogen and</td>
 <td>12,2%</td>
 </tr>
 <tr>
@@ -245,7 +245,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>Uma forma mais intuitiva de ler a perda é a <strong>perplexidade</strong> (e elevado à perda): o número de opções entre as quais o modelo está, em média, dividindo a chance.</p>
 <ul>
 <li>No início, a perda era 9,1. Um modelo que divide a chance igualmente entre os 8.192 tokens tem perda 9,01.</li>
-<li>A tabela abaixo mostra a perda nos textos separados para teste:</li>
+<li>A tabela abaixo mostra a perda nos textos separados para teste (na rodada 0, a perda do primeiro lote de treino, antes de qualquer correção):</li>
 </ul>
 <table>
 <thead>
@@ -368,12 +368,12 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>"Water is made of hydrogen and oxygen. The mixture is then divided into two groups: the hydrogen and oxygen."</p>
 <p>"Water is made of hydrogen and hydrides; the water and the hydrillic acid is the main part of the water, which can occur in every cell of the body"</p>
 <p>No primeiro sorteio saiu oxygen. No segundo saiu " hyd", um token que tinha 0,7% de chance, e o modelo continuou o texto a partir dele. O resultado tem a forma de um texto de ciências e usa uma palavra que não existe ("hydrillic").</p>
-<p>A frase do primeiro sorteio não estava nos textos de treino para ser decorada: neles, a sequência "is made of hydrogen and" aparece uma única vez, e continua com helium. A seção 4.2 mostra de onde vem o acerto: "hydrogen and" sozinho dá 12,2% a oxygen, e o começo "Water is made of" eleva esse número para 52,9%.</p>
+<p>A frase do primeiro sorteio não estava nos textos de treino para ser decorada: neles, a sequência "is made of hydrogen and" aparece uma única vez, e continua com helium. A seção 4.2 mostra de onde vem o acerto: "… hydrogen and", sem o começo da frase, dá 12,2% a oxygen, e o começo "Water is made of" eleva esse número para 52,9%.</p>
 <h3>Os limites de um modelo deste tamanho</h3>
 <p>Essa combinação falha em casos menos frequentes. Estrelas são feitas de hidrogênio e hélio, mas, para "Stars are made of hydrogen and", o pocketchat dá 38,4% a oxygen e 4,6% a " hel", o começo de helium.</p>
-<p>Com o começo "The French Revolution", ele escreveu:
-"The French Revolution in 1930, in which the United States was defeated on the 11th of July, 1933, and the French Revolution in December of that year, the United States declared war against France..."</p>
-<p>O texto tem o formato de um parágrafo de história (datas, guerra, declaração), mas os fatos estão errados: a Revolução Francesa começou em 1789. O modelo aprendeu quais palavras costumam aparecer em textos sobre revoluções e guerras, e não guardou os fatos corretos. Esse tipo de erro, escrito com a mesma forma de um texto correto, é o que se chama de <strong>alucinação</strong>. Ele acontece também em modelos grandes, com menos frequência.</p>
+<p>Com o começo "The French Revolution", ele escreveu (temperatura 0,8, semente 2):
+"The French Revolution occurred in 1906, when the French Revolutionary War, and the French Revolution, is the most powerful one, with more than 50% of the French population..."</p>
+<p>O texto tem o formato de um parágrafo de história (data, guerra, porcentagem), mas os fatos estão errados: a Revolução Francesa começou em 1789. O modelo aprendeu quais palavras costumam aparecer em textos sobre revoluções e guerras, e não guardou os fatos corretos. Esse tipo de erro, escrito com a mesma forma de um texto correto, é o que se chama de <strong>alucinação</strong>. Ele acontece também em modelos grandes, com menos frequência.</p>
 <h2>8. Do modelo ao assistente</h2>
 <p>O pocketchat calcula a próxima palavra de qualquer texto, mas não responde perguntas. Dois exemplos, com o modelo final:</p>
 <ul>

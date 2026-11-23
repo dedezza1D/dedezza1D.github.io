@@ -71,7 +71,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>O resultado, medido no modelo ao fim do pré-treino:</p>
 <ul>
 <li>as três listas ficaram praticamente iguais entre si (semelhança de 0,996 numa escala em que 1 é idêntico);</li>
-<li>o modelo dá a cada um deles uma chance de cerca de 0,00000006% como próxima palavra. Table, a palavra improvável da Parte 0, tinha 0,0001%.</li>
+<li>o modelo dá a cada um deles uma chance de cerca de 0,00000003% como próxima palavra. Table, a palavra improvável da Parte 0, tinha 0,0001%.</li>
 </ul>
 <p>Ou seja, o modelo começa esta etapa sem conseguir distinguir os três tokens e com notas muito baixas para eles. Antes do ajuste, uma opção é recomeçar as listas desses três tokens a partir da média das listas dos outros tokens, com pequenas diferenças entre si.</p>
 <p>No pocketchat, testamos as duas opções com o mesmo treino da seção 4:</p>
@@ -103,7 +103,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 </tbody>
 </table>
 <p>Só recomeçar as listas, antes de qualquer correção, já baixou a perda de 3,10 para 2,96. Depois do ajuste, as duas versões ficam próximas, com uma pequena vantagem para as listas recomeçadas, que é a versão usada no resto deste post. Com uma diferença desse tamanho, outra rodada de treino com outro sorteio poderia inverter a ordem.</p>
-<p>O tokenizer também impede que esses tokens sejam criados a partir do texto digitado por alguém. Se uma pessoa escrever "&lt;|assistant|&gt;" numa mensagem, esse texto é dividido em tokens comuns (&lt;, |, assistant...), e não vira o token especial. Sem essa proteção, uma mensagem poderia simular a fala do assistente e alterar o comportamento do modelo.</p>
+<p>O tokenizer também impede que esses tokens sejam criados a partir do texto digitado por alguém. Se uma pessoa escrever "&lt;|assistant|&gt;" numa mensagem, esse texto é dividido em tokens comuns (&lt;, |, ass, istant, |, &gt;), e não vira o token especial. Sem essa proteção, uma mensagem poderia simular a fala do assistente e alterar o comportamento do modelo.</p>
 <h2>3. Os exemplos de treino</h2>
 <p>Nesta etapa, os exemplos são conversas como a da seção 2. As características que importam:</p>
 <ul>
@@ -255,7 +255,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 </tr>
 </tbody>
 </table>
-<p>O ajuste fino corrige os mesmos parâmetros que guardam as associações do pré-treino, e as conversas de treino quase não falam de química. Corrigidos em direção ao formato das conversas, esses parâmetros perderam parte do que o modelo tinha aprendido sobre a composição da água. Esse efeito se chama <strong>esquecimento</strong>, e é um dos motivos para a taxa de aprendizado menor e o número pequeno de rodadas da seção 4.3.</p>
+<p>Uma medida mais ampla mostra o mesmo efeito: nos textos separados para teste no pré-treino, a perplexidade subiu de 25,6 para 30,1 depois do ajuste fino. O ajuste fino corrige os mesmos parâmetros que guardam as associações do pré-treino, e as conversas de treino quase não falam de química: só 75 das 17.411 têm a palavra oxygen. Corrigidos em direção ao formato das conversas, esses parâmetros ficaram piores em prever o texto do pré-treino. Esse efeito se chama <strong>esquecimento</strong>, e é um dos motivos para a taxa de aprendizado menor e o número pequeno de rodadas da seção 4.3.</p>
 <p>Respostas erradas escritas com o mesmo formato e a mesma segurança das certas são as <strong>alucinações</strong> da Parte 1. A seção 7 mostra várias.</p>
 <p>Os assistentes comerciais passam ainda por uma terceira etapa, o <strong>ajuste por preferências</strong>. Pessoas comparam pares de respostas e indicam a melhor, e o modelo é corrigido para produzir respostas parecidas com as preferidas. Métodos usados nessa etapa incluem o RLHF (aprendizado por reforço com feedback humano) e o DPO (otimização direta de preferências). É nessa etapa que os assistentes aprendem, por exemplo, a recusar pedidos perigosos e a admitir quando não sabem algo.</p>
 <h2>7. Resultados</h2>
@@ -305,7 +305,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>Outras respostas do modelo final, entre as 30 perguntas:</p>
 <ul>
 <li>"What is the capital of France?" → "Capital of France is the capital of France."</li>
-<li>"Why is the sky blue?" → "The sky blue is blue because of the color green."</li>
+<li>"Why is the sky blue?" → "The sky blue is blue because of the color green." Essa pergunta aparece 11 vezes nas conversas de treino; mesmo passando três vezes por elas, o modelo não aprendeu a resposta.</li>
 <li>"What were the main causes of World War I?" → uma lista numerada, bem formatada, que atribui a guerra à invasão soviética do Afeganistão (que aconteceu em 1979).</li>
 <li>"Recommend a healthy breakfast." → "...it's important to eat plenty of vegetables and fruits, and avoid coffee, soda, tea and other caffeine-based..." A recomendação de frutas e verduras faz sentido; é uma das poucas respostas com conteúdo aceitável.</li>
 </ul>

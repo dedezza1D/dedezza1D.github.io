@@ -209,7 +209,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 </thead>
 <tbody>
 <tr>
-<td>hydrogen and</td>
+<td>… hydrogen and</td>
 <td>12.2%</td>
 </tr>
 <tr>
@@ -245,7 +245,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>A more intuitive way to read the loss is the <strong>perplexity</strong> (e raised to the loss): the number of options the model is splitting its chance between, on average.</p>
 <ul>
 <li>At the start, the loss was 9.1. A model that splits the chance equally across the 8,192 tokens has a loss of 9.01.</li>
-<li>The table below shows the loss on the texts set aside for testing:</li>
+<li>The table below shows the loss on the texts set aside for testing (at round 0, the loss of the first training batch, before any correction):</li>
 </ul>
 <table>
 <thead>
@@ -368,12 +368,12 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>"Water is made of hydrogen and oxygen. The mixture is then divided into two groups: the hydrogen and oxygen."</p>
 <p>"Water is made of hydrogen and hydrides; the water and the hydrillic acid is the main part of the water, which can occur in every cell of the body"</p>
 <p>In the first draw, oxygen came out. In the second, " hyd" came out, a token that had a 0.7% chance, and the model continued the text from there. The result has the shape of a science text and uses a word that doesn't exist ("hydrillic").</p>
-<p>The sentence from the first draw wasn't in the training texts to be memorized: in them, the sequence "is made of hydrogen and" appears only once, and it continues with helium. Section 4.2 shows where the right answer comes from: "hydrogen and" alone gives oxygen 12.2%, and the beginning "Water is made of" raises that to 52.9%.</p>
+<p>The sentence from the first draw wasn't in the training texts to be memorized: in them, the sequence "is made of hydrogen and" appears only once, and it continues with helium. Section 4.2 shows where the right answer comes from: "… hydrogen and", without the start of the sentence, gives oxygen 12.2%, and the beginning "Water is made of" raises that to 52.9%.</p>
 <h3>The limits of a model this size</h3>
 <p>This combination fails in less frequent cases. Stars are made of hydrogen and helium, but for "Stars are made of hydrogen and", pocketchat gives oxygen 38.4% and " hel", the start of helium, 4.6%.</p>
-<p>Given the beginning "The French Revolution", it wrote:
-"The French Revolution in 1930, in which the United States was defeated on the 11th of July, 1933, and the French Revolution in December of that year, the United States declared war against France..."</p>
-<p>The text has the format of a history paragraph (dates, a war, a declaration), but the facts are wrong: the French Revolution began in 1789. The model learned which words tend to appear in texts about revolutions and wars, and didn't store the correct facts. This kind of error, written in the same form as a correct text, is called a <strong>hallucination</strong>. It happens in large models too, less often.</p>
+<p>Given the beginning "The French Revolution", it wrote (temperature 0.8, seed 2):
+"The French Revolution occurred in 1906, when the French Revolutionary War, and the French Revolution, is the most powerful one, with more than 50% of the French population..."</p>
+<p>The text has the format of a history paragraph (a date, a war, a percentage), but the facts are wrong: the French Revolution began in 1789. The model learned which words tend to appear in texts about revolutions and wars, and didn't store the correct facts. This kind of error, written in the same form as a correct text, is called a <strong>hallucination</strong>. It happens in large models too, less often.</p>
 <h2>8. From model to assistant</h2>
 <p>pocketchat calculates the next word for any text, but it doesn't answer questions. Two examples, with the final model:</p>
 <ul>

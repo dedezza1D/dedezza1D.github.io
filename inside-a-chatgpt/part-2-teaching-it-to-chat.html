@@ -71,7 +71,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>The result, measured on the model at the end of pretraining:</p>
 <ul>
 <li>the three lists became practically identical (a similarity of 0.996 on a scale where 1 means identical);</li>
-<li>the model gives each of them a chance of about 0.00000006% as the next word. Table, the unlikely word from Part 0, had 0.0001%.</li>
+<li>the model gives each of them a chance of about 0.00000003% as the next word. Table, the unlikely word from Part 0, had 0.0001%.</li>
 </ul>
 <p>In other words, the model starts this stage unable to tell the three tokens apart, and with very low scores for them. Before this stage, one option is to restart the lists of these three tokens from the average of the other tokens' lists, with small differences between them.</p>
 <p>On pocketchat, we tested both options with the same training from section 4:</p>
@@ -103,7 +103,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 </tbody>
 </table>
 <p>Just restarting the lists, before any correction, already brought the loss down from 3.10 to 2.96. After fine-tuning, the two versions end up close, with a small edge for the restarted lists, which is the version used in the rest of this post. With a difference this small, another training run with a different random draw could reverse the order.</p>
-<p>The tokenizer also prevents these tokens from being created from text someone types. If a person writes "&lt;|assistant|&gt;" in a message, that text is split into ordinary tokens (&lt;, |, assistant...) and doesn't become the special token. Without this protection, a message could imitate the assistant's turn and change the model's behavior.</p>
+<p>The tokenizer also prevents these tokens from being created from text someone types. If a person writes "&lt;|assistant|&gt;" in a message, that text is split into ordinary tokens (&lt;, |, ass, istant, |, &gt;) and doesn't become the special token. Without this protection, a message could imitate the assistant's turn and change the model's behavior.</p>
 <h2>3. The training examples</h2>
 <p>In this stage, the examples are conversations like the one in section 2. What matters about them:</p>
 <ul>
@@ -255,7 +255,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 </tr>
 </tbody>
 </table>
-<p>Fine-tuning corrects the same parameters that hold the associations from pretraining, and the training conversations barely mention chemistry. Corrected toward the format of the conversations, these parameters lost part of what the model had learned about what water is made of. This effect is called <strong>forgetting</strong>, and it is one of the reasons for the lower learning rate and the small number of rounds in section 4.3.</p>
+<p>A broader measurement shows the same effect: on the texts set aside for testing during pretraining, perplexity rose from 25.6 to 30.1 after fine-tuning. Fine-tuning corrects the same parameters that hold the associations from pretraining, and the training conversations barely mention chemistry: only 75 of the 17,411 contain the word oxygen. Corrected toward the format of the conversations, these parameters got worse at predicting the pretraining text. This effect is called <strong>forgetting</strong>, and it is one of the reasons for the lower learning rate and the small number of rounds in section 4.3.</p>
 <p>Wrong answers written with the same format and the same confidence as right ones are the <strong>hallucinations</strong> from Part 1. Section 7 shows several.</p>
 <p>Commercial assistants also go through a third stage, <strong>preference tuning</strong>. People compare pairs of answers and pick the better one, and the model is corrected to produce answers like the preferred ones. Methods used in this stage include RLHF (reinforcement learning from human feedback) and DPO (direct preference optimization). This is the stage where assistants learn, for example, to refuse dangerous requests and to admit when they don't know something.</p>
 <h2>7. Results</h2>
@@ -305,7 +305,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>Other answers from the final model, among the 30 questions:</p>
 <ul>
 <li>"What is the capital of France?" → "Capital of France is the capital of France."</li>
-<li>"Why is the sky blue?" → "The sky blue is blue because of the color green."</li>
+<li>"Why is the sky blue?" → "The sky blue is blue because of the color green." This question appears 11 times in the training conversations; even after going through them three times, the model did not learn the answer.</li>
 <li>"What were the main causes of World War I?" → a well-formatted numbered list that blames the war on the Soviet invasion of Afghanistan (which happened in 1979).</li>
 <li>"Recommend a healthy breakfast." → "...it's important to eat plenty of vegetables and fruits, and avoid coffee, soda, tea and other caffeine-based..." The advice on fruits and vegetables makes sense; it is one of the few answers with acceptable content.</li>
 </ul>
