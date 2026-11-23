@@ -70,7 +70,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>Each special token has its own list of numbers, like any other token. In pretraining, &lt;|user|&gt;, &lt;|assistant|&gt; and &lt;|end|&gt; never appeared in the text. Even so, their lists changed: in pocketchat, the same list of each token is also used to give it a score as the next word (Part 0, section 3), and in every round these three tokens were wrong answers. The correction rule from Part 0 (section 5) subtracted fractions of the sentence lists from them, 15 thousand times.</p>
 <p>The result, measured on the model at the end of pretraining:</p>
 <ul>
-<li>the three lists became practically identical (a similarity of 0.996 on a scale where 1 means identical);</li>
+<li>the three lists became practically identical. To compare two lists without their size counting, divide the similarity from Part 0 by the size of each list (the square root of the list's similarity with itself). The result is called the <strong>cosine</strong> and goes from −1 to 1, where 1 means the lists point in the same direction. Between these three tokens, the cosine is 0.996, and their sizes are almost equal (1.83);</li>
 <li>the model gives each of them a chance of about 0.00000003% as the next word. Table, the unlikely word from Part 0, had 0.0001%.</li>
 </ul>
 <p>In other words, the model starts this stage unable to tell the three tokens apart, and with very low scores for them. Before this stage, one option is to restart the lists of these three tokens from the average of the other tokens' lists, with small differences between them.</p>

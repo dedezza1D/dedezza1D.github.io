@@ -70,7 +70,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>Cada token especial tem a sua própria lista de números, como qualquer outro token. No pré-treino, &lt;|user|&gt;, &lt;|assistant|&gt; e &lt;|end|&gt; nunca apareceram no texto. Mesmo assim, as listas deles mudaram: no pocketchat, a mesma lista de cada token é usada para dar a nota dele como próxima palavra (Parte 0, seção 3), e em todas as rodadas esses três tokens foram respostas erradas. A regra de correção da Parte 0 (seção 5) subtraiu deles, 15 mil vezes, frações das listas das frases.</p>
 <p>O resultado, medido no modelo ao fim do pré-treino:</p>
 <ul>
-<li>as três listas ficaram praticamente iguais entre si (semelhança de 0,996 numa escala em que 1 é idêntico);</li>
+<li>as três listas ficaram praticamente iguais entre si. Para comparar duas listas sem que o tamanho delas pese, divide-se a semelhança da Parte 0 pelo tamanho de cada lista (a raiz quadrada da semelhança da lista com ela mesma). O resultado se chama <strong>cosseno</strong> e vai de −1 a 1, e 1 indica listas com a mesma direção. Entre esses três tokens, o cosseno é 0,996, e os tamanhos são quase iguais (1,83);</li>
 <li>o modelo dá a cada um deles uma chance de cerca de 0,00000003% como próxima palavra. Table, a palavra improvável da Parte 0, tinha 0,0001%.</li>
 </ul>
 <p>Ou seja, o modelo começa esta etapa sem conseguir distinguir os três tokens e com notas muito baixas para eles. Antes do ajuste, uma opção é recomeçar as listas desses três tokens a partir da média das listas dos outros tokens, com pequenas diferenças entre si.</p>
