@@ -116,7 +116,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <h3>4.1 Each token gets its list of numbers</h3>
 <p>The first step is the one from Part 0, section 1: each token in the sentence is replaced by its list of numbers (<strong>embedding</strong>). In pocketchat, each list has 512 numbers. They start out random and are corrected during training.</p>
 <h3>4.2 Attention: how the sentence becomes a list</h3>
-<p>In Part 0, the list for the sentence "Water is made of hydrogen and" gave the highest score to oxygen. This list is calculated at the last position of the sentence, the position of the token "and". On its own, "and" says nothing about chemistry: the information is in earlier tokens, like "hydrogen" and "Water". <strong>attention</strong> is the calculation that brings numbers from those tokens to the last position.</p>
+<p>In Part 0, the list for the sentence "Water is made of hydrogen and" gave the highest score to oxygen. This list is calculated at the last position of the sentence, the position of the token "and". On its own, "and" says nothing about chemistry: the information is in earlier tokens, like "hydrogen" and "Water". The calculation that brings numbers from those tokens to the last position is called <strong>attention</strong>.</p>
 <p>The calculation, for each token in the sentence:</p>
 <ol>
 <li>Three tables of numbers (matrices, Part 0, section 3) turn each token's list into three new lists:<ul>
