@@ -31,7 +31,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 .kicker a.lang{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--border)}
 </style><link rel="alternate" hreflang="en" href="https://dedezza1d.github.io/inside-a-chatgpt/part-0-the-math.html"></head><body><main><div class="kicker">Como um ChatGPT funciona por dentro · uma série em três partes · <a class="lang" href="../inside-a-chatgpt/part-0-the-math.html" hreflang="en">Read in English</a></div><nav class="series"><a href="index.html">← Índice da série</a><a href="parte-1-por-dentro.html">Parte 1 — Como um ChatGPT funciona por dentro →</a></nav><h1>Parte 0 — A matemática da IA sem medo</h1>
 <p><em>Série "Como um ChatGPT funciona por dentro" · Parte 0 de 3</em></p>
-<p>Para entender como um modelo de linguagem funciona, não é preciso dominar cálculo nem álgebra avançada. O funcionamento se apoia em cinco operações, e todas se resumem a somar e multiplicar.</p>
+<p>Para entender como um modelo de linguagem funciona, não é preciso dominar cálculo nem álgebra avançada. O funcionamento se apoia em cinco operações, que se resumem a somar e multiplicar, mais uma exponencial e uma divisão na seção 4.</p>
 <p>Neste post, as cinco aparecem num caso medido. O pocketchat é um modelo de linguagem pequeno, construído do zero e treinado num notebook, com textos em inglês. A Parte 1 mostra como ele foi feito. Quando recebe o começo de frase</p>
 <pre><code>Water is made of hydrogen and
 </code></pre>
@@ -356,7 +356,7 @@ softmax([2.0, 1.0, 0.0])   # [0.665, 0.245, 0.090]
 </table>
 <p>Com números sorteados, a palavra mais provável depois de "hydrogen and" é table.</p>
 <h3>A regra de correção</h3>
-<p>Nos textos de treino do pocketchat, "hydrogen and" aparece 1.021 vezes. A palavra seguinte é oxygen em 323 delas, carbon em 68 e table em nenhuma. Cada ocorrência gera uma correção.</p>
+<p>Nos textos de treino do pocketchat, "hydrogen and" aparece 1.021 vezes. A palavra seguinte é oxygen em 323 delas, carbon em 68 e table em nenhuma. Cada ocorrência que entra no treino gera uma correção.</p>
 <p>Suponha que a primeira frase de treino termine em "hydrogen and oxygen". A resposta certa é oxygen. A correção é feita assim:</p>
 <ul>
 <li>Palavra certa: soma-se à lista dela a lista da frase multiplicada por (1 − a porcentagem que ela recebeu). Oxygen recebeu 32,6%, então o multiplicador é 1 − 0,326 = 0,674.</li>

@@ -64,7 +64,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <ul>
 <li>letras: as sequências ficam muito longas;</li>
 <li>palavras inteiras: o vocabulário fica enorme, e uma palavra nova não tem lista;</li>
-<li>pedaços de palavras: palavras frequentes viram um token só (hydrogen, oxygen), e palavras raras são formadas por pedaços (no meio de uma frase, com o espaço antes: " helium" = " hel" + "ium"; " photosynthesis" = " phot" + "osy" + "nt" + "hesis"). É a escolha usada na prática.</li>
+<li>pedaços de palavras: no meio de uma frase, com o espaço antes, palavras frequentes viram um token só (" hydrogen", " oxygen") e palavras raras são formadas por pedaços (" helium" = " hel" + "ium"; " photosynthesis" = " phot" + "osy" + "nt" + "hesis"). É a escolha usada na prática.</li>
 </ul>
 <p>O tokenizer descobre os pedaços a partir de um grande volume de texto, repetindo este procedimento:</p>
 <ol>
@@ -109,8 +109,8 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 </tr>
 </tbody>
 </table>
-<p>Cada posição do texto é um exemplo, e a resposta é o token seguinte. Por isso, o treino pode usar grandes volumes de texto sem que ninguém escreva respostas. O pocketchat usou cerca de 480 milhões de tokens de textos educacionais em inglês.</p>
-<p>Nesses textos, "hydrogen and" aparece 1.021 vezes. A palavra seguinte é oxygen em 323 delas, helium em 185 e carbon em 68. O modelo não recebe essa contagem. Ele recebe os textos, uma posição por vez, e a regra de correção da Parte 0 (seção 5) é aplicada a cada posição.</p>
+<p>Cada posição do texto é um exemplo, e a resposta é o token seguinte. Por isso, o treino pode usar grandes volumes de texto sem que ninguém escreva respostas. Os dados de treino do pocketchat têm cerca de 480 milhões de tokens de textos educacionais em inglês. O treino sorteou pedaços desses textos, e cerca de um terço do texto nunca caiu em nenhum pedaço.</p>
+<p>Nesses textos, "hydrogen and" aparece 1.021 vezes. A palavra seguinte é oxygen em 323 delas, helium em 185 e carbon em 68. O modelo não recebe essa contagem. Ele recebe os pedaços sorteados para o treino, uma posição por vez, e a regra de correção da Parte 0 (seção 5) é aplicada a cada posição desses pedaços.</p>
 <p>Uma parte pequena dos textos (0,5%) é separada e nunca é usada nas correções. Ela serve para medir o erro do modelo em textos que ele nunca viu. Se esse erro cai junto com o erro nos textos de treino, o modelo está aprendendo padrões que valem para textos novos.</p>
 <h2>4. O caminho de uma frase dentro do modelo</h2>
 <h3>4.1 Cada token recebe sua lista de números</h3>
@@ -168,7 +168,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <ul>
 <li>Cada token só compara a sua query com as keys dos tokens anteriores (e com a própria). Se pudesse usar o token seguinte, o modelo teria acesso à resposta durante o treino.</li>
 <li>O pocketchat faz esse cálculo 8 vezes em paralelo, com 8 grupos diferentes de tabelas, chamados <strong>cabeças</strong>. Cada cabeça produz uma lista, e as 8 listas são juntadas.</li>
-<li>O produto escalar não depende da ordem dos tokens: "cachorro morde homem" e "homem morde cachorro" dariam as mesmas notas. Por isso, antes da comparação, os números das listas query e key são alterados por uma conta que depende da posição do token na frase (a técnica usada no pocketchat se chama RoPE). Com isso, a nota entre dois tokens passa a depender também da distância entre eles.</li>
+<li>O produto escalar não vê a ordem dos tokens anteriores: se eles fossem embaralhados, com o último token no mesmo lugar, o último daria a cada um deles a mesma nota de antes. Para "man" no fim de "the dog bites the man" (o cachorro morde o homem), "dog bites" e "bites dog" pareceriam iguais. Por isso, antes da comparação, os números das listas query e key são alterados por uma conta que depende da posição do token na frase (a técnica usada no pocketchat se chama RoPE). Com isso, a nota entre dois tokens passa a depender também da distância entre eles.</li>
 </ul>
 <h3>O que as medições mostram no pocketchat</h3>
 <p>No pocketchat, a atenção é calculada 64 vezes para cada token: 8 cabeças em cada um dos 8 blocos (seção 4.4). Dá para medir as porcentagens que o token "and" atribui a cada token da frase em cada uma delas. Três exemplos:</p>
@@ -230,7 +230,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>Em cada bloco, o resultado da atenção e o resultado do processamento são <strong>somados</strong> à lista que entrou, em vez de substituí-la. Isso preserva o que os blocos anteriores calcularam e é o que permite treinar modelos com muitos blocos.</p>
 <p>Somando todos os números das listas de tokens e de todas as tabelas, o pocketchat tem 29,9 milhões de parâmetros.</p>
 <h3>4.5 A previsão</h3>
-<p>Depois do último bloco, a lista da última posição da frase é a lista da frase: a que começa com [2,324; −1,347; 0,371; 2,043] na Parte 0. A partir daí, o cálculo é o da Parte 0. A lista da frase é comparada com a lista de cada um dos 8.192 tokens, o que dá uma nota para cada possível próxima palavra, e o softmax converte as notas em porcentagens.</p>
+<p>Depois do último bloco vem um último ajuste, chamado normalização: a lista é dividida pelo tamanho típico dos seus números, e cada uma das 512 posições é multiplicada por um número aprendido no treino. O resultado, na última posição da frase, é a lista da frase: a que começa com [2,324; −1,347; 0,371; 2,043] na Parte 0. A partir daí, o cálculo é o da Parte 0. A lista da frase é comparada com a lista de cada um dos 8.192 tokens, o que dá uma nota para cada possível próxima palavra, e o softmax converte as notas em porcentagens.</p>
 <h2>5. O treino na prática</h2>
 <p>O treino aplica a regra da Parte 0, seção 5, a todos os 29,9 milhões de parâmetros:</p>
 <ol>
@@ -371,7 +371,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <p>A frase do primeiro sorteio não estava nos textos de treino para ser decorada: neles, a sequência "is made of hydrogen and" aparece uma única vez, e continua com helium. A seção 4.2 mostra de onde vem o acerto: "… hydrogen and", sem o começo da frase, dá 12,2% a oxygen, e o começo "Water is made of" eleva esse número para 52,9%.</p>
 <h3>Os limites de um modelo deste tamanho</h3>
 <p>Essa combinação falha em casos menos frequentes. Estrelas são feitas de hidrogênio e hélio, mas, para "Stars are made of hydrogen and", o pocketchat dá 38,4% a oxygen e 4,6% a " hel", o começo de helium.</p>
-<p>Com o começo "The French Revolution", ele escreveu (temperatura 0,8, semente 2):
+<p>Com o começo "The French Revolution", ele escreveu, num de oito sorteios (temperatura 0,8, semente 2):
 "The French Revolution occurred in 1906, when the French Revolutionary War, and the French Revolution, is the most powerful one, with more than 50% of the French population..."</p>
 <p>O texto tem o formato de um parágrafo de história (data, guerra, porcentagem), mas os fatos estão errados: a Revolução Francesa começou em 1789. O modelo aprendeu quais palavras costumam aparecer em textos sobre revoluções e guerras, e não guardou os fatos corretos. Esse tipo de erro, escrito com a mesma forma de um texto correto, é o que se chama de <strong>alucinação</strong>. Ele acontece também em modelos grandes, com menos frequência.</p>
 <h2>8. Do modelo ao assistente</h2>
