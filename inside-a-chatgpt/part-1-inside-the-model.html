@@ -32,7 +32,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 </style><link rel="alternate" hreflang="pt-BR" href="https://dedezza1d.github.io/como-um-chatgpt-funciona/parte-1-por-dentro.html"></head><body><main><div class="kicker">Inside a ChatGPT · a series in three parts · <a class="lang" href="../como-um-chatgpt-funciona/parte-1-por-dentro.html" hreflang="pt-BR">Leia em português</a></div><nav class="series"><a href="part-0-the-math.html">← Part 0 — The math of AI, without fear</a><a href="part-2-teaching-it-to-chat.html">Part 2 — Teaching the model to chat →</a></nav><h1>Part 1 — Inside the model</h1>
 <p><em>Series "Inside a ChatGPT" · Part 1 of 3</em></p>
 <p>In Part 0, we followed pocketchat as it completed "Water is made of hydrogen and" and saw the five operations it uses: representing words as lists of numbers, measuring similarity, giving a score to each next word, turning scores into percentages and correcting the numbers based on its errors. One question was left open: how does the model calculate the sentence list? This post answers it and shows the full model.</p>
-<p>pocketchat is a model built from scratch and trained on a laptop with an ordinary graphics card (RTX 4060, 8 GB). It has about 30 million parameters, thousands of times fewer than commercial models, and it uses the same architecture.</p>
+<p>pocketchat is a model built from scratch and trained on a laptop with an ordinary graphics card (RTX 4060, 8 GB). It has about 30 million parameters, thousands of times fewer than commercial models, and it uses the same basic architecture as open models such as Llama.</p>
 <p>In this post:</p>
 <ol>
 <li>The task a language model solves</li>
@@ -64,7 +64,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <ul>
 <li>letters: the sequences get very long;</li>
 <li>whole words: the vocabulary gets huge, and a new word has no list;</li>
-<li>pieces of words: frequent words become a single token (hydrogen, oxygen), and rare words are made of pieces (helium = hel + ium; photosynthesis = phot + osy + nt + hesis). This is the choice used in practice.</li>
+<li>pieces of words: frequent words become a single token (hydrogen, oxygen), and rare words are made of pieces (in the middle of a sentence, with the space before them: " helium" = " hel" + "ium"; " photosynthesis" = " phot" + "osy" + "nt" + "hesis"). This is the choice used in practice.</li>
 </ul>
 <p>The tokenizer finds the pieces from a large amount of text by repeating this procedure:</p>
 <ol>

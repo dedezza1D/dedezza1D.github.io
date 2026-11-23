@@ -32,7 +32,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 </style><link rel="alternate" hreflang="en" href="https://dedezza1d.github.io/inside-a-chatgpt/part-1-inside-the-model.html"></head><body><main><div class="kicker">Como um ChatGPT funciona por dentro · uma série em três partes · <a class="lang" href="../inside-a-chatgpt/part-1-inside-the-model.html" hreflang="en">Read in English</a></div><nav class="series"><a href="parte-0-matematica.html">← Parte 0 — A matemática da IA sem medo</a><a href="parte-2-conversar.html">Parte 2 — Ensinando o modelo a conversar →</a></nav><h1>Parte 1 — Como um ChatGPT funciona por dentro</h1>
 <p><em>Série "Como um ChatGPT funciona por dentro" · Parte 1 de 3</em></p>
 <p>Na Parte 0, acompanhamos o pocketchat completando "Water is made of hydrogen and" e vimos as cinco operações que ele usa: representar palavras com listas de números, medir semelhança, dar uma nota a cada próxima palavra, converter notas em porcentagens e corrigir os números a partir dos erros. Ficou uma pergunta em aberto: como o modelo calcula a lista da frase? Este post responde a ela e mostra o modelo completo.</p>
-<p>O pocketchat é um modelo construído do zero e treinado num notebook com uma placa de vídeo comum (RTX 4060, 8 GB). Ele tem cerca de 30 milhões de parâmetros, milhares de vezes menos que os modelos comerciais, e usa a mesma arquitetura deles.</p>
+<p>O pocketchat é um modelo construído do zero e treinado num notebook com uma placa de vídeo comum (RTX 4060, 8 GB). Ele tem cerca de 30 milhões de parâmetros, milhares de vezes menos que os modelos comerciais, e usa a mesma arquitetura básica de modelos abertos como o Llama.</p>
 <p>Neste post:</p>
 <ol>
 <li>A tarefa que um modelo de linguagem resolve</li>
@@ -64,7 +64,7 @@ ol.toc li{margin:.5em 0}ol.toc .meta{display:block}
 <ul>
 <li>letras: as sequências ficam muito longas;</li>
 <li>palavras inteiras: o vocabulário fica enorme, e uma palavra nova não tem lista;</li>
-<li>pedaços de palavras: palavras frequentes viram um token só (hydrogen, oxygen), e palavras raras são formadas por pedaços (helium = hel + ium; photosynthesis = phot + osy + nt + hesis). É a escolha usada na prática.</li>
+<li>pedaços de palavras: palavras frequentes viram um token só (hydrogen, oxygen), e palavras raras são formadas por pedaços (no meio de uma frase, com o espaço antes: " helium" = " hel" + "ium"; " photosynthesis" = " phot" + "osy" + "nt" + "hesis"). É a escolha usada na prática.</li>
 </ul>
 <p>O tokenizer descobre os pedaços a partir de um grande volume de texto, repetindo este procedimento:</p>
 <ol>
